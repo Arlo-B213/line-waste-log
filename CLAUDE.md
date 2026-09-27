@@ -1,6 +1,6 @@
 # Line Waste Log — project guide for Claude
 
-Chefs use this tablet app for the end-of-night line waste count across the Pechanga Resort Casino food court. They count **every outlet**. After that, the app sends **one** combined report, which is emailed to management and logged to a Google Sheet.
+Chefs use this tablet app for the end-of-night line waste count across the Pechanga Resort Casino food court. They count **every outlet** and submit each night. Each submission is logged to a Google Sheet, including a Mon–Sun weekly tab. Management gets **one weekly email** after Sunday's count is submitted; there is no nightly email (`DAILY_EMAIL = false` in `Code.gs`).
 
 ## Layout
 - `index.html` — the whole app in one self-contained file: HTML, CSS and vanilla JS with no build step. It is hosted on GitHub Pages and added to the tablets' home screens.
@@ -19,7 +19,7 @@ Chefs use this tablet app for the end-of-night line waste count across the Pecha
 - The session (all outlets for one business date) is kept in `localStorage` under `wl_session`. Unsent reports go in `wl_outbox` and are retried on `online` and on load. Before 5 AM, the business date defaults to the previous day.
 - The POST uses `Content-Type: text/plain` so Apps Script needs no CORS preflight.
 - ⚙︎ settings are behind `CONFIG.MANAGER_PIN`. They cover the endpoint URL, shared key, whether chefs see $ costs (off by default), retrying unsent reports, and clearing tonight's count.
-- **Weekly log:** each post also fills a Mon–Sun tab named `Week M-D to M-D`, with the newest tab first. The tab has a week summary at the top, then one block per outlet (`■ Outlet` header, item rows, `Daily Waste Cost ($)`, `Closing Time`, `Counted By (Badge)`). Re-sending a night overwrites that day's column. New menu items are inserted above the block's cost row. The nightly email includes a week-to-date table.
+- **Weekly log:** each post also fills a Mon–Sun tab named `Week M-D to M-D`, with the newest tab first. The tab has a week summary at the top, then one block per outlet (`■ Outlet` header, item rows, `Daily Waste Cost ($)`, `Closing Time`, `Counted By (Badge)`). Re-sending a night overwrites that day's column. New menu items are inserted above the block's cost row. The **weekly report email** is sent by `sendWeeklyReport_` when a Sunday count arrives. If Sunday is re-sent, an "UPDATED" copy goes out. If Sunday is never submitted, the report goes out "late" with the first count of the next week. Sent status is kept in cell A3 of the week tab. To send the current week's report by hand, run `sendWeeklyReportNow()` from the editor.
 - Payload shape: `{id, key, chef, badge, date, submittedAt, totals:{itemsWasted,units,cost}, stations:[{station, stationLabel, closeTime, notes, totals, items:[{category,item,uom,qty,costPerUnit,cost,targetPct}]}]}`. If you change it, update `Code.gs` too.
 
 ## Working on it

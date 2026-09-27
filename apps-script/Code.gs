@@ -15,6 +15,7 @@ const CC          = '';                                           // optional
 const SHARED_KEY  = 'pechanga-fc-waste';                          // must match the app
 const AMBER_AT = 5, RED_AT = 10;                                  // template status key
 const TIMEZONE = 'America/Los_Angeles';
+const DAILY_EMAIL  = false;  // true = also email every night; false = weekly report only
 // ======================
 
 const LOG_SHEET = 'Waste Log';
@@ -29,7 +30,7 @@ function doPost(e) {
 
     if (p.test) {
       MailApp.sendEmail({ to: RECIPIENTS, subject: '✅ Line Waste Log — test email',
-        htmlBody: '<p>The Line Waste Log app is connected. Nightly all-outlet waste reports will arrive here.</p>' });
+        htmlBody: '<p>The Line Waste Log app is connected. The weekly waste report will arrive here after each Sunday count.</p>' });
       return json_({ ok: true, test: true });
     }
     if (!p.stations || !p.stations.length) return json_({ ok: false, error: 'No outlets in report' });
@@ -53,7 +54,13 @@ function doPost(e) {
     if (rows.length) log.getRange(log.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
 
     const week = updateWeek_(ss, p);
-    sendReport_(p, ss.getUrl(), week);
+    if (DAILY_EMAIL) sendReport_(p, ss.getUrl(), week);
+    // Weekly report: goes out when Sunday's count comes in (week complete).
+    if (week.idx === 6) sendWeeklyReport_(ss, week.sheet, false);
+    // Safety net: if Sunday was never submitted, send last week's report
+    // with the first count of the new week.
+    const prev = ss.getSheetByName(weekName_(new Date(week.mon.getFullYear(), week.mon.getMonth(), week.mon.getDate() - 7)));
+    if (prev && !weeklySent_(prev)) sendWeeklyReport_(ss, prev, true);
     return json_({ ok: true });
   } catch (err) {
     return json_({ ok: false, error: String(err && err.message || err) });
@@ -135,7 +142,7 @@ function updateWeek_(ss, p) {
     if (!cur || row[1] === '' || row[1] === 'Item' || typeof row[3] !== 'number') return;
     for (let d = 0; d < 7; d++) { const q = row[DAY_COL - 1 + d]; if (typeof q === 'number') stationDaily[cur][d] += q * row[3]; }
   });
-  return { name, gid: sh.getSheetId(), days, idx, stationDaily };
+  return { name, gid: sh.getSheetId(), days, idx, stationDaily, sheet: sh, mon };
 }
 
 function buildWeekSheet_(ss, name, mon, days, stations) {
@@ -337,6 +344,145 @@ function sendReport_(p, sheetUrl, week) {
   const opts = { to: RECIPIENTS, subject, htmlBody: html, name: 'Food Court Waste Log' };
   if (CC) opts.cc = CC;
   MailApp.sendEmail(opts);
+}
+
+/* =====================================================================
+   WEEKLY REPORT EMAIL (Mon–Sun) — built from the week tab
+   ===================================================================== */
+function weeklySent_(sh) { return String(sh.getRange(3, 1).getValue()).indexOf('Weekly report emailed') === 0; }
+
+function readWeek_(sh) {
+  const n = sh.getLastRow();
+  const v = sh.getRange(1, 1, n, NCOLS).getValues();
+  const days = v[3].slice(DAY_COL - 1, DAY_COL + 6).map(String);           // row 4 headers
+  const out = [];
+  v.forEach(row => {
+    const a = String(row[0]);
+    if (a.indexOf('■ ') !== 0) return;
+    const b = findBlock_(sh, a.slice(2));
+    const items = [];
+    for (let r = b.first; r <= b.last; r++) {
+      const x = v[r - 1];
+      const q = x.slice(DAY_COL - 1, DAY_COL + 6).map(z => typeof z === 'number' ? z : null);
+      items.push({ cat: x[0], item: x[1], uom: x[2], cost: Number(x[3]) || 0, days: q });
+    }
+    out.push({ label: a.slice(2), items,
+      close: v[b.closeRow - 1].slice(DAY_COL - 1, DAY_COL + 6).map(String),
+      chef: v[b.chefRow - 1].slice(DAY_COL - 1, DAY_COL + 6).map(String) });
+  });
+  return { days, stations: out };
+}
+
+function weekNotes_(ss, sh) {
+  const subs = ss.getSheetByName(SUB_SHEET); if (!subs || subs.getLastRow() < 2) return [];
+  const title = String(sh.getRange(1, 1).getValue());
+  const m = title.match(/Sun (\d+)\/(\d+)\/(\d{4})/); if (!m) return [];
+  const sun = new Date(Number(m[3]), Number(m[1]) - 1, Number(m[2]));
+  const mon = new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() - 6);
+  const rows = subs.getRange(2, 1, subs.getLastRow() - 1, 11).getValues();
+  const toDate = x => x instanceof Date ? new Date(x.getFullYear(), x.getMonth(), x.getDate())
+    : (String(x).match(/^\d{4}-\d{2}-\d{2}/) ? new Date(Number(String(x).slice(0, 4)), Number(String(x).slice(5, 7)) - 1, Number(String(x).slice(8, 10))) : null);
+  const seen = {};
+  return rows.filter(r => { const d = toDate(r[2]); return d && d >= mon && d <= sun && String(r[10]).trim(); })
+    .map(r => { const d = toDate(r[2]); return { day: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()] + ' ' + md_(d), station: r[3], chef: r[5], note: String(r[10]).trim() }; })
+    .filter(x => { const k = x.day + x.station + x.note; if (seen[k]) return false; seen[k] = 1; return true; });
+}
+
+function sendWeeklyReport_(ss, sh, late) {
+  const W = readWeek_(sh);
+  const money = n => '$' + Number(n).toFixed(2);
+  const fmtQ = q => (Math.round(q * 100) / 100).toString();
+  const color = q => q >= RED_AT ? '#d93b3b' : q >= AMBER_AT ? '#e08a00' : '';
+  const td = 'padding:5px 6px;border-bottom:1px solid #f0f0f0';
+  const th = 'padding:5px 6px;font-size:11px;color:#777;font-weight:600;border-bottom:1px solid #ddd';
+  const dayShort = W.days.map(d => d.split(' ')[0]);
+
+  // day coverage: a day counts as logged if any outlet has a closing time for it
+  const logged = [0, 1, 2, 3, 4, 5, 6].map(i => W.stations.some(s => s.close[i] && s.close[i] !== ''));
+  const missing = W.days.filter((d, i) => !logged[i]);
+
+  const stDay = W.stations.map(s => [0, 1, 2, 3, 4, 5, 6].map(i => s.items.reduce((a, it) => a + (it.days[i] || 0) * it.cost, 0)));
+  const dayTot = [0, 1, 2, 3, 4, 5, 6].map(i => stDay.reduce((a, r) => a + r[i], 0));
+  const weekCost = dayTot.reduce((a, b) => a + b, 0);
+  const all = [];
+  W.stations.forEach(s => s.items.forEach(it => {
+    const q = it.days.reduce((a, b) => a + (b || 0), 0);
+    if (q > 0) all.push({ station: s.label, item: it.item, uom: it.uom, qty: q, cost: q * it.cost, peak: Math.max.apply(null, it.days.map(x => x || 0)) });
+  }));
+  const units = all.reduce((a, b) => a + b.qty, 0);
+  const top = all.slice().sort((a, b) => b.cost - a.cost).slice(0, 10);
+  const flagged = all.filter(i => i.peak >= RED_AT);
+  const worstDay = dayTot.indexOf(Math.max.apply(null, dayTot));
+  const stWeek = W.stations.map((s, i) => ({ label: s.label, cost: stDay[i].reduce((a, b) => a + b, 0) }));
+  const topSt = stWeek.slice().sort((a, b) => b.cost - a.cost)[0];
+
+  const kpi = (label, val) => `<td style="padding:10px 14px;background:#f5f1e4;border-radius:8px"><div style="font-size:12px;color:#777">${label}</div><div style="font-size:20px;font-weight:700;color:#0f1b33">${val}</div></td>`;
+
+  const summary = `<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:14px">
+    <tr><th style="${th};text-align:left">Outlet</th>${dayShort.map(d => `<th style="${th};text-align:right">${d}</th>`).join('')}<th style="${th};text-align:right">Week</th></tr>
+    ${W.stations.map((s, i) => `<tr><td style="${td}">${esc_(s.label)}</td>${stDay[i].map((v, d) => `<td style="${td};text-align:right">${logged[d] ? (v ? money(v) : '–') : '<span style="color:#bbb">n/a</span>'}</td>`).join('')}<td style="${td};text-align:right;font-weight:700">${money(stWeek[i].cost)}</td></tr>`).join('')}
+    <tr style="font-weight:700"><td style="padding:6px">All outlets</td>${dayTot.map((v, d) => `<td style="padding:6px;text-align:right">${logged[d] ? money(v) : ''}</td>`).join('')}<td style="padding:6px;text-align:right">${money(weekCost)}</td></tr>
+  </table>`;
+
+  const topHtml = top.length ? `<div style="margin-top:20px;font-weight:700;color:#0f1b33">Top ${top.length} items by waste cost</div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px">
+    ${top.map((t, i) => `<tr><td style="${td};color:#999;width:22px">${i + 1}</td><td style="${td}">${esc_(t.item)} <span style="color:#999">· ${esc_(t.station)}</span></td><td style="${td};text-align:right">${fmtQ(t.qty)} ${esc_(t.uom)}</td><td style="${td};text-align:right;font-weight:600">${money(t.cost)}</td></tr>`).join('')}
+    </table>` : '';
+
+  const details = W.stations.map((s, si) => {
+    const rows = s.items.filter(it => it.days.some(q => q > 0)).map(it => {
+      const q = it.days.reduce((a, b) => a + (b || 0), 0);
+      return `<tr><td style="${td}">${esc_(it.item)}</td>${it.days.map(x => `<td style="${td};text-align:center;${x >= AMBER_AT ? 'color:' + color(x) + ';font-weight:700' : ''}">${x === null ? '' : (x ? fmtQ(x) : '–')}</td>`).join('')}<td style="${td};text-align:right">${fmtQ(q)} <span style="color:#999">${esc_(it.uom)}</span></td><td style="${td};text-align:right;font-weight:600">${money(q * it.cost)}</td></tr>`;
+    }).join('') || `<tr><td colspan="10" style="${td};color:#2e9e62">No waste recorded this week.</td></tr>`;
+    return `<div style="margin-top:20px">
+      <div style="background:#0f1b33;color:#fff;padding:8px 12px;border-radius:6px;font-weight:700">${esc_(s.label)}<span style="float:right;font-weight:400;color:#d4af37">${money(stWeek[si].cost)}</span></div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <tr><th style="${th};text-align:left">Item</th>${dayShort.map(d => `<th style="${th}">${d}</th>`).join('')}<th style="${th};text-align:right">Qty</th><th style="${th};text-align:right">Cost</th></tr>
+        ${rows}
+      </table></div>`;
+  }).join('');
+
+  const notes = weekNotes_(ss, sh);
+  const notesHtml = notes.length ? `<div style="margin-top:20px;padding:10px 12px;background:#fafafa;border-left:3px solid #d4af37;font-size:13px"><b>Chef notes this week</b><br>${notes.map(n => `<div style="margin-top:4px"><b>${esc_(n.day)} · ${esc_(n.station)}:</b> ${esc_(n.note)} <span style="color:#999">— ${esc_(n.chef)}</span></div>`).join('')}</div>` : '';
+
+  const range = W.days[0].replace(/^Mon /, '') + ' – ' + W.days[6].replace(/^Sun /, '');
+  const html = `
+  <div style="font-family:Segoe UI,Arial,sans-serif;max-width:720px;color:#222">
+    <div style="background:#0f1b33;color:#fff;padding:16px 20px;border-radius:10px 10px 0 0;border-bottom:3px solid #d4af37">
+      <div style="font-size:12px;letter-spacing:1px;color:#d4af37">FOOD COURT · WEEKLY LINE WASTE REPORT</div>
+      <div style="font-size:22px;font-weight:700">Mon ${esc_(range)}</div>
+      <div style="font-size:13px;color:#c8d2e4">Pechanga Fried Chicken · Pronto · Little Wok · Agave</div>
+    </div>
+    <div style="border:1px solid #e5e5e5;border-top:0;padding:16px 20px;border-radius:0 0 10px 10px">
+      ${late ? `<p style="margin:0 0 10px;padding:8px 10px;background:#fde5c0;border-radius:6px;font-size:13px">Sunday's count was not submitted, so this report was sent with the first count of the following week.</p>` : ''}
+      <table cellspacing="8" style="margin:-8px"><tr>
+        ${kpi('Week waste cost', money(weekCost))}${kpi('Items wasted', all.length)}${kpi('Total units', fmtQ(units))}${kpi('Days logged', logged.filter(Boolean).length + ' / 7')}
+      </tr></table>
+      ${missing.length ? `<p style="margin:12px 0 0;color:#b02a2a">⚠ No count submitted for: ${missing.map(esc_).join(', ')}</p>` : ''}
+      ${topSt && topSt.cost ? `<p style="margin:12px 0 2px">Highest-cost outlet: <b>${esc_(topSt.label)}</b> (${money(topSt.cost)}, ${weekCost ? Math.round(100 * topSt.cost / weekCost) : 0}% of total)</p>` : ''}
+      ${weekCost ? `<p style="margin:2px 0">Highest-waste day: <b>${esc_(W.days[worstDay])}</b> (${money(dayTot[worstDay])})</p>` : ''}
+      ${flagged.length ? `<p style="margin:2px 0;color:#d93b3b">🔴 Hit 10+ units on a single day: ${flagged.map(i => esc_(i.item) + ' – ' + esc_(i.station)).join(', ')}. Review prep / par levels.</p>` : ''}
+      ${summary}
+      ${topHtml}
+      ${details}
+      ${notesHtml}
+      <p style="font-size:12px;color:#999;margin-top:18px">🟠 5–9 · 🔴 10+ units in a day · – = counted, no waste &nbsp;|&nbsp; <a href="${ss.getUrl()}#gid=${sh.getSheetId()}" style="color:#8a6d12">Open the ${esc_(sh.getName())} tab</a></p>
+    </div>
+  </div>`;
+
+  const already = weeklySent_(sh);
+  const subject = `${already ? 'UPDATED · ' : ''}Weekly Line Waste · Mon ${range} · ${money(weekCost)}`;
+  const opts = { to: RECIPIENTS, subject, htmlBody: html, name: 'Food Court Waste Log' };
+  if (CC) opts.cc = CC;
+  MailApp.sendEmail(opts);
+  sh.getRange(3, 1).setValue('Weekly report emailed ' + Utilities.formatDate(new Date(), TIMEZONE, 'EEE M/d h:mm a'));
+}
+
+/** Run from the editor to email the current (or most recent) week's report right now. */
+function sendWeeklyReportNow() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheets().find(s => /^Week \d+-\d+ to /.test(s.getName()));
+  if (sh) sendWeeklyReport_(ss, sh, false);
 }
 
 function sheet_(ss, name, headers) {

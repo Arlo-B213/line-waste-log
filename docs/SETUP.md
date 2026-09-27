@@ -25,14 +25,23 @@ Host the HTML file the same way as your other apps (GitHub Pages works well). Th
 ## How it works each night
 1. The chef enters their name, badge # and the business date.
 2. The **Outlets** screen lists PFC, Pronto, Little Wok and Agave. Each one shows *Not started*, *In progress* or *✓ Done*.
-3. For each outlet, the chef sets that outlet's closing time and counts every item (+/−, or type an amount). **Finish outlet** won't go through while any item is blank; blank items are highlighted, and one tap can set the rest to 0.
-4. **Review & send report** stays locked until **all outlets are done**. The chef reviews everything and taps **Send report**, which sends **one email** to management covering every outlet.
+3. For each outlet, the chef sets that outlet's closing time and counts every item (+/−, or type an amount). **Finish outlet** won't go through while any blank items remain.
+4. **Review & submit** unlocks when all outlets are done. The chef reviews the count and taps **Submit tonight's count**.
 
-- The email has the night's total cost, an outlet-by-outlet summary (closing time, units, cost, % of total, top $ item), 🔴 flags for anything at 10+ units, and a detailed breakdown for each outlet with the chef's notes.
-- Everything is logged to the Google Sheet: a **Submissions** tab (one row per outlet per night) and a **Waste Log** tab (one row per wasted item).
-- Progress is saved on the tablet as the chef goes. If the app gets closed partway through, it picks up where they left off.
-- If Wi-Fi drops, the report is saved and sent automatically when the connection returns. Duplicates are ignored.
-- A manager can clear an unfinished count under ⚙︎ → **Clear tonight's count**.
+## What management gets: one weekly report
+- Every night's count fills that day's column on this week's **"Week M-D to M-D"** tab in the Google Sheet, laid out like the Excel template (Mon–Sun across the top).
+- **After Sunday's count is submitted,** one email goes out covering Monday through Sunday. It includes:
+  - the week's total cost, items wasted, units and days logged
+  - any days with no count
+  - the highest-cost outlet and highest-waste day
+  - 10+ flags
+  - an outlet-by-day table and the top 10 items by cost
+  - each outlet's items day by day
+  - all chef notes from the week
+- If Sunday is corrected and re-sent, an **UPDATED** email goes out. If nobody submits Sunday, the report goes out with the first count of the next week and says Sunday was missing.
+- To send a week's report early, open Apps Script and run `sendWeeklyReportNow`.
+- To go back to a nightly email as well, set `DAILY_EMAIL = true` in the script.
+- If Wi-Fi drops, the count is saved on the phone and sent automatically when the connection returns. Duplicates are ignored.
 
 ## Changing items or costs
 Items, units and cost per unit are in the `STATIONS` list inside the HTML. They were copied from your template's *Waste Summary* tab. Edit names or costs there. Status colors follow the template's key: 🟢 under 5 units, 🟠 5–9, 🔴 10 or more (`AMBER_AT` / `RED_AT` in both files).

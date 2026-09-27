@@ -126,7 +126,7 @@ dialog::backdrop{background:#000a}
 <main id="vStart">
   <h2>Start closing count</h2>
   <div class="card">
-    <p class="muted small" style="margin:0 0 12px">You'll count waste for every outlet. The report emails to management once all outlets are finished.</p>
+    <p class="muted small" style="margin:0 0 12px">You'll count waste for every outlet, then submit. Each night is added to this week's log. Management gets the full Monday–Sunday report by email after Sunday's count.</p>
     <div class="fields">
       <label class="f">Chef / Sous Chef name<input class="inp" id="chef" autocomplete="name" placeholder="First & last name"></label>
       <label class="f">Badge #<input class="inp" id="badge" inputmode="numeric" placeholder="e.g. 12345"></label>
@@ -142,7 +142,7 @@ dialog::backdrop{background:#000a}
   <h2>Outlets to count</h2>
   <p class="checklist" id="hubLine"></p>
   <div class="outlets" id="outletList"></div>
-  <button class="btn gold block" id="hubReviewBtn" disabled>Review & send report →</button>
+  <button class="btn gold block" id="hubReviewBtn" disabled>Review & submit →</button>
   <p class="muted small center" id="hubHint"></p>
 </main>
 
@@ -167,7 +167,7 @@ dialog::backdrop{background:#000a}
 
 <!-- STEP 4: Review all -->
 <main id="vReview" class="hidden">
-  <h2>Review & send</h2>
+  <h2>Review & submit</h2>
   <div class="kpis">
     <div class="kpi"><small>Items wasted</small><b id="kItems">0</b></div>
     <div class="kpi"><small>Total units</small><b id="kUnits">0</b></div>
@@ -178,7 +178,7 @@ dialog::backdrop{background:#000a}
   <div id="noEndpoint" class="status warn hidden">Auto-email isn't set up on this device yet. A manager can add it under ⚙︎ Settings. For now you can send it with your email app or download it.</div>
   <div class="row-actions" style="margin-bottom:10px">
     <button class="btn ghost" id="editBtn">← Outlets</button>
-    <button class="btn gold" id="submitBtn">Send report ✉</button>
+    <button class="btn gold" id="submitBtn">Submit tonight's count</button>
   </div>
   <div class="row-actions hidden" id="fallbackRow">
     <button class="btn ghost" id="mailtoBtn">Open in email app</button>
@@ -190,7 +190,7 @@ dialog::backdrop{background:#000a}
 <main id="vDone" class="hidden">
   <div class="card center">
     <div class="big-check" id="doneIcon">✅</div>
-    <h2 id="doneTitle">Sent to management</h2>
+    <h2 id="doneTitle">Count submitted</h2>
     <p class="muted" id="doneMsg"></p>
     <button class="btn gold block" id="newBtn" style="margin-top:12px">Done</button>
   </div>
@@ -333,7 +333,7 @@ function renderHub(){
   const n = STATIONS.length;
   $("#hubLine").textContent = `${doneN} of ${n} outlets complete`;
   $("#hubReviewBtn").disabled = doneN < n;
-  $("#hubHint").textContent = doneN < n ? `Finish all ${n} outlets to send the report. Your progress is saved on this tablet.` : "All outlets done — review and send.";
+  $("#hubHint").textContent = doneN < n ? `Finish all ${n} outlets to submit tonight's count. Your progress is saved on this tablet.` : "All outlets done — review and submit.";
 }
 $("#hubReviewBtn").onclick = () => { if (allDone()) { renderReview(); show("vReview"); } };
 
@@ -402,7 +402,7 @@ function finishOutlet(){
   S.outlets[cur].finished = true; save();
   const left = STATIONS.filter(s => !outletDone(s.station)).length;
   renderHub(); show("vHub");
-  toast(left ? `${STATION_META[cur].label} done ✓ — ${left} outlet${left>1?"s":""} to go` : "All outlets done — review and send");
+  toast(left ? `${STATION_META[cur].label} done ✓ — ${left} outlet${left>1?"s":""} to go` : "All outlets done — review and submit");
 }
 $("#finishOutletBtn").onclick = finishOutlet;
 $("#finishOutletBtn2").onclick = finishOutlet;
@@ -441,7 +441,7 @@ function renderReview(){
   const hasUrl = !!settings.url;
   $("#noEndpoint").classList.toggle("hidden", hasUrl);
   $("#fallbackRow").classList.toggle("hidden", hasUrl);
-  $("#submitBtn").textContent = hasUrl ? "Send report ✉" : "Save & finish";
+  $("#submitBtn").textContent = hasUrl ? "Submit tonight's count" : "Save & finish";
 }
 $("#editBtn").onclick = () => { renderHub(); show("vHub"); };
 
@@ -471,11 +471,15 @@ $("#submitBtn").onclick = async () => {
   btn.disabled = true; btn.textContent = "Sending…";
   try {
     await post(payload);
-    endSession("✅","Sent to management",`All ${payload.stations.length} outlets for ${prettyDate(payload.date)} were emailed and logged. Thanks, ${payload.chef.split(" ")[0]}!`);
+    const isSun = new Date(payload.date + "T12:00:00").getDay() === 0;
+    endSession("✅", isSun ? "Week complete" : "Count submitted",
+      `All ${payload.stations.length} outlets for ${prettyDate(payload.date)} were added to this week's log.` +
+      (isSun ? " That finishes Monday–Sunday, so the weekly report is on its way to management." : " The weekly report goes to management after Sunday's count.") +
+      ` Thanks, ${payload.chef.split(" ")[0]}!`);
   } catch (e) {
     setOutbox([...outbox(), payload]);
     endSession("📶","Saved — will send automatically",`No connection to the email service right now (${e.message}). The report is saved on this tablet and will send as soon as it's back online.`);
-  } finally { btn.disabled = false; btn.textContent = "Send report ✉"; }
+  } finally { btn.disabled = false; btn.textContent = "Submit tonight's count"; }
 };
 function toCSV(p){
   const q = v => `"${String(v).replace(/"/g,'""')}"`;

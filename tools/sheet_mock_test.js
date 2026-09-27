@@ -19,6 +19,7 @@ function makeSheet(name, id) {
         setValue(v) { set(r, c, { v }); return rng; },
         setFormulas(fs) { fs.forEach((row, i) => row.forEach((f, j) => set(r + i, c + j, String(f).startsWith('=') ? { f } : { v: f }))); return rng; },
         setFormula(f) { set(r, c, { f }); return rng; },
+        getValue() { return get(r, c).v; },
         getValues() { const a = []; for (let i = 0; i < nr; i++) { const row = []; for (let j = 0; j < nc; j++) row.push(get(r + i, c + j).v); a.push(row); } return a; },
       };
       const px = new Proxy(rng, { get: (t, k) => (k in t ? (...a) => { const res = t[k](...a); return res === rng ? px : res; } : () => px) });
@@ -37,6 +38,7 @@ const ss = {
   getSheetByName: n => sheets.find(s => s.name === n) || null,
   insertSheet: (n, idx) => { const s = makeSheet(n, nextId++); idx === 0 ? sheets.unshift(s) : sheets.push(s); return s; },
   getUrl: () => 'https://docs.google.com/spreadsheets/d/TEST',
+  getSheets: () => sheets,
 };
 const ruleBuilder = () => { const b = new Proxy({}, { get: (t, k) => k === 'build' ? () => ({}) : () => b }); return b; };
 global.SpreadsheetApp = { getActiveSpreadsheet: () => ss, newConditionalFormatRule: ruleBuilder };
@@ -66,14 +68,17 @@ function payload(date, id, qtyFn, extraItem) {
 const post = p => JSON.parse(doPost({ postData: { contents: JSON.stringify(p) } }));
 const res = [];
 res.push(post(payload('2026-09-21', 'a', (s, i) => s + i)));                  // Mon
-res.push(post(payload('2026-09-23', 'b', (s, i) => (s + 1) * 3)));           // Wed
+const pb = payload('2026-09-23', 'b', (s, i) => (s + 1) * 3); pb.stations[1].notes = 'Oven 2 down, pizzas remade'; res.push(post(pb));           // Wed
 res.push(post(payload('2026-09-23', 'c', (s, i) => 1)));                     // Wed re-send (correction) overwrites
 res.push(post(payload('2026-09-23', 'c', (s, i) => 99)));                    // duplicate id ignored
 res.push(post(payload('2026-09-27', 'd', (s, i) => 12, ['Proteins', 'Birria', 'Lbs.', 5]))); // Sun + new menu item
-res.push(post(payload('2026-09-28', 'e', (s, i) => 2)));                     // next Monday → new tab
+res.push(post(payload('2026-09-27', 'd2', (s, i) => 11)));                   // Sun re-send → UPDATED weekly
+res.push(post(payload('2026-09-28', 'e', (s, i) => 2)));                     // next Monday → new tab, no email
+res.push(post(payload('2026-10-06', 'f', (s, i) => 1)));                     // week 2 had no Sunday → late weekly for 9/28 week
 console.log('responses', JSON.stringify(res));
 console.log('tabs', sheets.map(s => s.name).join(' , '));
 const wk = ss.getSheetByName('Week 9-21 to 9-27');
 console.log(wk.dump());
-fs.writeFileSync(path.join(out, 'mock_email.html'), mails[mails.length - 2].htmlBody);
-console.log('emails', mails.length, '| subject:', mails[mails.length - 2].subject);
+mails.forEach((x, i) => console.log('email', i + 1, '|', x.subject));
+fs.writeFileSync(path.join(out, 'mock_email.html'), mails[0].htmlBody);
+fs.writeFileSync(path.join(out, 'mock_email_late.html'), mails[mails.length - 1].htmlBody);
