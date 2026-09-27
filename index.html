@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f1b33">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Waste Log">
+<title>Line Waste Log</title>
+<style>
+:root{
+  --bg:#0c1629; --panel:#132340; --panel2:#1a2d50; --line:#27406b;
+  --text:#eef2f8; --muted:#9fb0cc; --gold:#d4af37; --gold2:#f0cf6a;
+  --green:#3fbf7f; --amber:#f0a030; --red:#ef5b5b;
+  --radius:14px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{min-height:100vh;padding-bottom:env(safe-area-inset-bottom)}
+button,input,textarea,select{font:inherit;color:inherit}
+header.top{position:sticky;top:0;z-index:20;background:linear-gradient(180deg,#0f1b33,#0c1629);border-bottom:1px solid var(--line);padding:calc(10px + env(safe-area-inset-top)) 16px 10px;display:flex;align-items:center;gap:12px}
+.brand{display:flex;flex-direction:column;flex:1;min-width:0}
+.brand b{font-size:18px;letter-spacing:.3px;color:var(--gold2)}
+.brand small{color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.iconbtn{background:var(--panel);border:1px solid var(--line);border-radius:12px;width:44px;height:44px;display:grid;place-items:center;cursor:pointer;font-size:20px;flex:none}
+.pill{font-size:12px;padding:3px 9px;border-radius:99px;background:var(--amber);color:#1b1200;font-weight:700}
+main{max-width:900px;margin:0 auto;padding:16px}
+h2{font-size:20px;margin:6px 0 12px}
+h3{font-size:15px;margin:0;color:var(--gold2);letter-spacing:.3px}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:14px}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:520px){.fields{grid-template-columns:1fr}}
+label.f{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
+.inp{background:#0b1426;border:1px solid var(--line);border-radius:10px;padding:12px;font-size:17px;width:100%;min-height:48px}
+.inp:focus{outline:2px solid var(--gold);border-color:transparent}
+textarea.inp{min-height:84px;resize:vertical}
+.btn{border:0;border-radius:12px;padding:14px 18px;font-weight:700;font-size:17px;cursor:pointer;min-height:52px}
+.btn.gold{background:var(--gold);color:#16120a}
+.btn.gold:disabled{opacity:.4;cursor:not-allowed}
+.btn.ghost{background:transparent;border:1px solid var(--line)}
+.btn.block{width:100%}
+.row-actions{display:flex;gap:10px}
+.row-actions .btn{flex:1}
+.center{text-align:center}
+.hidden{display:none!important}
+
+/* outlet hub */
+.outlets{display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:14px}
+@media(min-width:700px){.outlets{grid-template-columns:1fr 1fr}}
+.outlet{display:flex;align-items:center;gap:14px;text-align:left;background:var(--panel);border:2px solid var(--line);border-radius:var(--radius);padding:16px;cursor:pointer;width:100%}
+.outlet .emo{font-size:34px;flex:none}
+.outlet .info{flex:1;min-width:0}
+.outlet .info b{display:block;font-size:17px}
+.outlet .info span{font-size:13px;color:var(--muted)}
+.outlet .bar{height:6px;background:var(--panel2);border-radius:9px;overflow:hidden;margin-top:8px}
+.outlet .bar i{display:block;height:100%;background:var(--gold)}
+.outlet .badge{flex:none;font-size:12px;font-weight:700;padding:5px 10px;border-radius:99px;background:var(--panel2);color:var(--muted)}
+.outlet.prog{border-color:#6b5a1f}
+.outlet.prog .badge{background:rgba(212,175,55,.18);color:var(--gold2)}
+.outlet.done{border-color:#2f7a55}
+.outlet.done .badge{background:rgba(63,191,127,.18);color:var(--green)}
+.outlet.done .bar i{background:var(--green)}
+.checklist{font-size:14px;color:var(--muted);margin:0 0 12px}
+
+/* counting */
+.cat{margin-bottom:16px}
+.cat-h{display:flex;justify-content:space-between;align-items:center;padding:4px 4px 8px}
+.item{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 10px 10px 12px;margin-bottom:8px}
+.item.done{border-color:#2f5c48}
+.item.flash{border-color:var(--amber);box-shadow:0 0 0 3px rgba(240,160,48,.3)}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--line);flex:none;display:inline-block}
+.dot.g{background:var(--green)}.dot.a{background:var(--amber)}.dot.r{background:var(--red)}
+.iname{flex:1;min-width:0}
+.iname b{display:block;font-weight:600;font-size:16px}
+.iname span{font-size:12px;color:var(--muted)}
+.step{display:flex;align-items:center;gap:6px;flex:none}
+.step button{width:46px;height:46px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);font-size:24px;font-weight:700;cursor:pointer;line-height:1}
+.step button:active{background:var(--gold);color:#16120a}
+.step input{width:72px;height:46px;text-align:center;font-size:19px;font-weight:700;border-radius:10px;border:1px solid var(--line);background:#0b1426}
+.step input:focus{outline:2px solid var(--gold)}
+.step input::placeholder{color:#4b628a;font-weight:400}
+.uom{font-size:12px;color:var(--muted);width:34px}
+.hint{font-size:13px;color:var(--muted);background:var(--panel2);border-radius:10px;padding:8px 12px;margin:6px 0 10px}
+.progress{height:6px;background:var(--panel2);border-radius:9px;overflow:hidden}
+.progress i{display:block;height:100%;background:var(--gold);width:0;transition:width .2s}
+@media(max-width:430px){.step button{width:40px;height:44px;font-size:22px}.step input{width:56px;height:44px}.item{gap:8px;padding:8px}.uom{width:28px;font-size:11px}.iname b{font-size:15px}}
+
+footer.bar{position:sticky;bottom:0;z-index:15;background:rgba(12,22,41,.96);backdrop-filter:blur(6px);border-top:1px solid var(--line);padding:12px 16px calc(12px + env(safe-area-inset-bottom))}
+footer.bar .in{max-width:900px;margin:0 auto;display:flex;gap:12px;align-items:center}
+footer.bar .stats{flex:1;font-size:14px;color:var(--muted)}
+footer.bar .stats b{color:var(--text);font-size:17px}
+
+/* review */
+table.rev{width:100%;border-collapse:collapse;font-size:15px}
+table.rev th{text-align:left;font-size:12px;color:var(--muted);font-weight:600;padding:6px 4px;border-bottom:1px solid var(--line)}
+table.rev td{padding:9px 4px;border-bottom:1px solid #1e3257}
+table.rev .n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+table.rev tr.catrow td{color:var(--gold2);font-size:13px;font-weight:600;padding-top:14px}
+table.rev tr.tot td{font-weight:700;border-top:2px solid var(--line);border-bottom:0}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.kpi{background:var(--panel2);border-radius:12px;padding:12px}
+.kpi small{display:block;color:var(--muted);font-size:12px}
+.kpi b{font-size:22px}
+.st-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:6px}
+.st-h b{font-size:17px}
+.status{padding:14px;border-radius:12px;margin-bottom:14px;font-weight:600}
+.status.warn{background:rgba(240,160,48,.15);border:1px solid var(--amber)}
+.big-check{font-size:64px;margin:10px 0}
+.toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:#000d;padding:10px 16px;border-radius:10px;font-size:14px;z-index:50;max-width:calc(100% - 32px);text-align:center}
+dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:16px;max-width:520px;width:calc(100% - 32px);padding:20px}
+dialog::backdrop{background:#000a}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <button class="iconbtn" id="backBtn" title="Back" style="visibility:hidden">←</button>
+  <div class="brand"><b>Line Waste Log</b><small id="subtitle">Food Court · End-of-night count</small></div>
+  <span class="pill hidden" id="outboxPill"></span>
+  <button class="iconbtn" id="settingsBtn" title="Manager settings">⚙︎</button>
+</header>
+
+<!-- STEP 1: Start -->
+<main id="vStart">
+  <h2>Start closing count</h2>
+  <div class="card">
+    <p class="muted small" style="margin:0 0 12px">You'll count waste for every outlet. The report emails to management once all outlets are finished.</p>
+    <div class="fields">
+      <label class="f">Chef / Sous Chef name<input class="inp" id="chef" autocomplete="name" placeholder="First & last name"></label>
+      <label class="f">Badge #<input class="inp" id="badge" inputmode="numeric" placeholder="e.g. 12345"></label>
+      <label class="f">Business date<input class="inp" id="bizDate" type="date"></label>
+    </div>
+  </div>
+  <button class="btn gold block" id="startBtn" disabled>Continue →</button>
+  <p class="muted small center" id="startHint">Enter your name and badge to begin.</p>
+</main>
+
+<!-- STEP 2: Outlet hub -->
+<main id="vHub" class="hidden">
+  <h2>Outlets to count</h2>
+  <p class="checklist" id="hubLine"></p>
+  <div class="outlets" id="outletList"></div>
+  <button class="btn gold block" id="hubReviewBtn" disabled>Review & send report →</button>
+  <p class="muted small center" id="hubHint"></p>
+</main>
+
+<!-- STEP 3: Count one outlet -->
+<main id="vCount" class="hidden">
+  <div class="progress" style="margin-bottom:12px"><i id="prog"></i></div>
+  <div class="card" style="padding:12px 16px">
+    <div class="fields">
+      <label class="f">Outlet closing time<input class="inp" id="closeTime" type="time"></label>
+    </div>
+  </div>
+  <div class="hint">Enter what is being <b>thrown out</b> tonight. Every item needs a number — use <b>0</b> if there's no waste. Weights go in 0.5 steps; you can also type exact amounts.</div>
+  <div id="countList"></div>
+  <div class="card">
+    <h3 style="margin-bottom:8px">Notes for this outlet (optional)</h3>
+    <textarea class="inp" id="notes" placeholder="e.g. Slow night — rain. Fryer 2 down at 7pm. Over-prepped for an event that cancelled."></textarea>
+  </div>
+  <button class="btn ghost block" id="zeroRestBtn" style="margin-bottom:90px">Mark all remaining blank items as 0</button>
+</main>
+
+<!-- STEP 4: Review all -->
+<main id="vReview" class="hidden">
+  <h2>Review & send</h2>
+  <div class="kpis">
+    <div class="kpi"><small>Items wasted</small><b id="kItems">0</b></div>
+    <div class="kpi"><small>Total units</small><b id="kUnits">0</b></div>
+    <div class="kpi" id="kCostBox"><small>Est. waste cost</small><b id="kCost">$0</b></div>
+  </div>
+  <div class="card" id="revMeta"></div>
+  <div id="revStations"></div>
+  <div id="noEndpoint" class="status warn hidden">Auto-email isn't set up on this device yet. A manager can add it under ⚙︎ Settings. For now you can send it with your email app or download it.</div>
+  <div class="row-actions" style="margin-bottom:10px">
+    <button class="btn ghost" id="editBtn">← Outlets</button>
+    <button class="btn gold" id="submitBtn">Send report ✉</button>
+  </div>
+  <div class="row-actions hidden" id="fallbackRow">
+    <button class="btn ghost" id="mailtoBtn">Open in email app</button>
+    <button class="btn ghost" id="csvBtn">Download CSV</button>
+  </div>
+</main>
+
+<!-- STEP 5: Done -->
+<main id="vDone" class="hidden">
+  <div class="card center">
+    <div class="big-check" id="doneIcon">✅</div>
+    <h2 id="doneTitle">Sent to management</h2>
+    <p class="muted" id="doneMsg"></p>
+    <button class="btn gold block" id="newBtn" style="margin-top:12px">Done</button>
+  </div>
+</main>
+
+<footer class="bar hidden" id="countBar">
+  <div class="in">
+    <div class="stats"><b id="fCounted">0/0</b> counted · <span id="fUnits">0</span> units<span id="fCostWrap"> · <span id="fCost">$0</span></span></div>
+    <button class="btn gold" id="finishOutletBtn">Finish outlet ✓</button>
+  </div>
+</footer>
+
+<!-- Settings -->
+<dialog id="dlgPin">
+  <h3 style="margin-bottom:12px">Manager access</h3>
+  <input class="inp" id="pinIn" type="password" inputmode="numeric" placeholder="Manager PIN">
+  <p class="small" id="pinErr" style="color:var(--red);min-height:18px"></p>
+  <div class="row-actions"><button class="btn ghost" id="pinCancel">Cancel</button><button class="btn gold" id="pinOk">Unlock</button></div>
+</dialog>
+<dialog id="dlgSettings">
+  <h3 style="margin-bottom:12px">Settings</h3>
+  <label class="f" style="margin-bottom:12px">Email service URL (Google Apps Script web app)
+    <input class="inp" id="setUrl" placeholder="https://script.google.com/macros/s/…/exec"></label>
+  <label class="f" style="margin-bottom:12px">Shared key (must match the script)
+    <input class="inp" id="setKey" placeholder="e.g. pechanga-fc-waste"></label>
+  <label style="display:flex;gap:10px;align-items:center;margin-bottom:12px"><input type="checkbox" id="setShowCost" style="width:22px;height:22px"> Show $ cost to chefs while counting</label>
+  <p class="small muted" id="setOutbox"></p>
+  <p class="small" id="setMsg" style="min-height:18px"></p>
+  <div class="row-actions" style="margin-bottom:10px"><button class="btn ghost" id="setTest">Send test</button><button class="btn ghost" id="setRetry">Retry unsent</button></div>
+  <div class="row-actions" style="margin-bottom:10px"><button class="btn ghost" id="setReset">Clear tonight's count</button></div>
+  <div class="row-actions"><button class="btn ghost" id="setClose">Close</button><button class="btn gold" id="setSave">Save</button></div>
+</dialog>
+
+<script>
+/* =====================================================================
+   CONFIG — edit these before hosting (or set them per device in ⚙︎)
+   ===================================================================== */
+const CONFIG = {
+  ENDPOINT_URL: "",                 // Google Apps Script /exec URL
+  SHARED_KEY:   "pechanga-fc-waste",// must match SHARED_KEY in Code.gs
+  MANAGER_PIN:  "2468",             // unlocks ⚙︎ settings on a device
+  FALLBACK_EMAIL: "",               // used only by the "Open in email app" fallback
+  SHOW_COST_TO_CHEFS: false,
+  // Status thresholds from the template's key: 🟢 <5 · 🟠 5–9 · 🔴 10+
+  AMBER_AT: 5, RED_AT: 10
+};
+const STATION_META = {
+  "PFC Product":   {label:"Pechanga Fried Chicken", emo:"🍗"},
+  "Pronto Product":{label:"Pronto",                 emo:"🍕"},
+  "Little Wok":    {label:"Little Wok",             emo:"🥢", note:"Soups: 3 Lbs. = 1 gal"},
+  "Agave":         {label:"Agave",                  emo:"🌮"}
+};
+/* Items, units & cost/unit pulled from FC - Line Waste Log.xlsx.
+   Format: [item, UOM, target waste %, cost per unit $] */
+const STATIONS = [{"station": "PFC Product", "cats": [{"name": "🍗 Chicken", "items": [["Legs", "ea.", 0.1, 0.517], ["Thighs", "ea.", 0.1, 0.787], ["Wings", "ea.", 0.1, 0.327], ["Breasts", "ea.", 0.1, 3.707], ["Biscuits", "ea.", 0.1, 0.3], ["Popcorn Chicken", "ea.", 0.1, 2.127]]}, {"name": "🥣 Cupped Sides", "items": [["Mashed Potato (cup)", "Lbs.", 0.1, 1.34], ["Mac & Cheese (cup)", "Lbs.", 0.1, 1.34]]}, {"name": "🍲 Panned Sides", "items": [["Mashed Potato (pan)", "Lbs.", 0.1, 1.34], ["Mac & Cheese (pan)", "Lbs.", 0.1, 1.34], ["Coleslaw", "Lbs.", 0.1, 0.6], ["Green Bean / Broccoli", "Lbs.", 0.1, 1.34], ["Corn", "Lbs.", 0.1, 1.34]]}]}, {"station": "Pronto Product", "cats": [{"name": "🍕 Pizza & Mains", "items": [["Pepperoni Pizza", "slice", 0.1, 10.75], ["MeatLover Pizza", "slice", 0.1, 13.45], ["Veggie Pizza", "slice", 0.1, 11.54], ["Specialty Pizza", "slice", 0.1, 15.85], ["Cheese Pizza", "slice", 0.1, 9.14], ["Garlic Bread", "ea.", 0.1, 0.54], ["Lasagna", "pan", 0.1, 2.87], ["Mozzarella Sticks", "ea.", 0.1, 2.44], ["Italian Sausage", "Lbs.", 0.1, 2.92], ["Meatballs", "ea.", 0.1, 2.82]]}]}, {"station": "Little Wok", "cats": [{"name": "🥢 Entrees", "items": [["Chow Mein", "LBS", 0.1, 1.8], ["Fried Rice", "LBS", 0.1, 4.355], ["Steamed Rice", "LBS", 0.1, 3.9], ["Ginger Fish", "LBS", 0.1, 6.245], ["Orange Chicken", "LBS", 0.1, 4], ["Green Bean Chicken", "LBS", 0.1, 1.45], ["Steamed Veggie", "LBS", 0.1, 0.85], ["Beef Broccoli", "LBS", 0.1, 1.03], ["Eggplant Tofu", "LBS", 0.1, 1.75], ["Chili Sweet Shrimp", "LBS", 0.1, 1.49], ["Ribs", "LBS", 0.1, 2.3], ["Teryaki Chicken", "LBS", 0.1, 0.96], ["Spicy Beef", "LBS", 0.1, 1.75], ["Kung Pao Chicken", "LBS", 0.1, 3.17], ["Wallnut Shrimp", "LBS", 0.1, 1.49], ["Beef Galbi", "LBS", 0.1, 12.35], ["Pork Belly", "LBS", 0.1, 6.65]]}, {"name": "🥟 Sides", "items": [["Veggie Eggroll", "Ea.", 0.1, 0.51], ["Chicken Eggroll", "Ea.", 0.1, 1.8], ["Pork Eggroll", "Ea.", 0.1, 0.99], ["Cream Cheese Wontons", "Ea.", 0.1, 2.04], ["Plantains", "Ea.", 0.1, 0.58], ["Butterfly Shrimps", "Ea.", 0.1, 1.15], ["Poke Bowl", "Ea.", 0.1, 7.175]]}, {"name": "🍜 Soups", "items": [["Wonton", "Lbs.", 0.1, 3.036], ["Egg Drop", "Lbs.", 0.1, 0.8]]}]}, {"station": "Agave", "cats": [{"name": "🌮 Proteins", "items": [["Carne Asada", "Lbs.", 0.1, 8.6], ["Chicken Tinga", "Lbs.", 0.1, 2.53], ["Beef Barbacoa", "Lbs.", 0.1, 6.08], ["Ground Beef", "Lbs.", 0.1, 2.5], ["Carnitas", "Lbs.", 0.1, 7.5], ["16/20 Shrimp", "Lbs.", 0.1, 4], ["Breaded Shrimp", "Lbs.", 0.1, 3.5], ["Battered Fish", "Lbs.", 0.1, 2.5]]}, {"name": "🍚 Rice & Beans", "items": [["Spanish Rice", "Lbs.", 0.1, 0.92], ["Cilantro Lime Rice", "Lbs.", 0.1, 0.92], ["Refried Beans", "Lbs.", 0.1, 0.54], ["Black Beans", "Lbs.", 0.1, 1.9]]}, {"name": "🫙 Condiments & Extras", "items": [["Pico de Gallo", "Lbs.", 0.1, 0.61], ["Guacamole", "Lbs.", 0.1, 0.51], ["Sour Cream", "Lbs.", 0.1, 0.57], ["Enchilada Sauce", "Lbs.", 0.1, 2], ["Cheese Sauce", "Lbs.", 0.1, 0.8], ["Chipotle", "Lbs.", 0.1, 0.54], ["Mixed Veggies", "Lbs.", 0.1, 0.28], ["Taco Shell", "ea.", 0.1, 0.15], ["Lettuce", "Lbs.", 0.1, 0.3], ["Cabbage", "Lbs.", 0.1, 0.25], ["Jalapeno", "Lbs.", 0.1, 0.4]]}]}];
+
+/* ===================================================================== */
+const $ = s => document.querySelector(s);
+const LS = {
+  get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},
+  del(k){try{localStorage.removeItem(k)}catch(e){}}
+};
+const settings = Object.assign({url:CONFIG.ENDPOINT_URL,key:CONFIG.SHARED_KEY,showCost:CONFIG.SHOW_COST_TO_CHEFS}, LS.get("wl_settings",{}));
+const money = n => "$" + (Math.round(n*100)/100).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtN = n => (Math.round(n*100)/100).toString();
+const isWeight = u => /lb|pan/i.test(u);
+const todayISO = () => { const d=new Date(); if(d.getHours()<5) d.setDate(d.getDate()-1); return d.toLocaleDateString("en-CA"); };
+const nowHM = () => new Date().toTimeString().slice(0,5);
+const hm12 = t => { if(!t) return "—"; const [h,m]=t.split(":").map(Number); return `${(h%12)||12}:${String(m).padStart(2,"0")} ${h<12?"AM":"PM"}`; };
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)+Math.random().toString(36).slice(2));
+function prettyDate(iso){ const [y,m,d]=iso.split("-").map(Number); return new Date(y,m-1,d).toLocaleDateString(undefined,{weekday:"short",month:"numeric",day:"numeric"}); }
+
+/* One closing session = all outlets for one business date */
+function blankOutlets(){ const o={}; STATIONS.forEach(s => o[s.station]={counts:{},notes:"",closeTime:"",finished:false}); return o; }
+let S = LS.get("wl_session",null);
+if (!S || !S.outlets) S = {chef:"",badge:"",date:todayISO(),outlets:blankOutlets()};
+STATIONS.forEach(s => { if(!S.outlets[s.station]) S.outlets[s.station]={counts:{},notes:"",closeTime:"",finished:false}; });
+let cur = null;           // station currently being counted
+let view = "vStart";
+const save = () => LS.set("wl_session",S);
+
+/* ---------- helpers ---------- */
+const stationData = st => STATIONS.find(s=>s.station===st);
+const itemsOf = st => stationData(st).cats.flatMap(c => c.items.map(i => ({cat:c.name, name:i[0], uom:i[1], target:i[2], cost:i[3]})));
+function lvl(q){ if(q==null||q==="") return ""; if(q>=CONFIG.RED_AT) return "r"; if(q>=CONFIG.AMBER_AT) return "a"; return "g"; }
+function outletTotals(st){
+  const o=S.outlets[st], items=itemsOf(st); let units=0,cost=0,wasted=0,counted=0;
+  items.forEach(i => { const q=o.counts[i.name]; if(q!=null) counted++; if(q>0){wasted++;units+=q;cost+=q*i.cost;} });
+  return {items,units,cost,wasted,counted,total:items.length,complete:counted===items.length};
+}
+const outletDone = st => S.outlets[st].finished && outletTotals(st).complete;
+const allDone = () => STATIONS.every(s => outletDone(s.station));
+
+/* ---------- views ---------- */
+function show(v){
+  ["vStart","vHub","vCount","vReview","vDone"].forEach(id => $("#"+id).classList.toggle("hidden", id!==v));
+  $("#countBar").classList.toggle("hidden", v!=="vCount");
+  $("#backBtn").style.visibility = ["vHub","vCount","vReview"].includes(v) ? "visible" : "hidden";
+  let sub = "Food Court · End-of-night count";
+  if (v==="vCount" && cur) sub = `${STATION_META[cur].label} · ${prettyDate(S.date)}`;
+  else if (v==="vHub"||v==="vReview") sub = `${prettyDate(S.date)} · ${S.chef}`;
+  $("#subtitle").textContent = sub;
+  view = v; window.scrollTo(0,0);
+}
+$("#backBtn").onclick = () => {
+  if (view==="vCount") { save(); renderHub(); show("vHub"); }
+  else if (view==="vReview") { renderHub(); show("vHub"); }
+  else if (view==="vHub") show("vStart");
+};
+
+/* ---------- start ---------- */
+function validateStart(){
+  S.chef = $("#chef").value.trim(); S.badge = $("#badge").value.trim(); S.date = $("#bizDate").value;
+  const ok = S.chef && S.badge && S.date;
+  $("#startBtn").disabled = !ok;
+  $("#startHint").textContent = ok ? "" : "Enter your name and badge to begin.";
+}
+["chef","badge","bizDate"].forEach(id => $("#"+id).addEventListener("input", validateStart));
+$("#startBtn").onclick = () => { LS.set("wl_lastChef",{chef:S.chef,badge:S.badge}); save(); renderHub(); show("vHub"); };
+
+/* ---------- hub ---------- */
+function renderHub(){
+  const list = $("#outletList"); list.innerHTML = "";
+  let doneN = 0;
+  STATIONS.forEach(s => {
+    const st=s.station, m=STATION_META[st], t=outletTotals(st), done=outletDone(st), started=t.counted>0;
+    if (done) doneN++;
+    const b = document.createElement("button");
+    b.className = "outlet" + (done?" done":started?" prog":"");
+    const detail = done ? `${t.wasted} item${t.wasted===1?"":"s"} wasted · ${fmtN(t.units)} units${settings.showCost?" · "+money(t.cost):""} · closed ${hm12(S.outlets[st].closeTime)}`
+                 : started ? `${t.counted} of ${t.total} items counted` : `${t.total} items`;
+    b.innerHTML = `<span class="emo">${m.emo}</span><div class="info"><b>${m.label}</b><span>${detail}</span>
+      <div class="bar"><i style="width:${100*t.counted/t.total}%"></i></div></div>
+      <span class="badge">${done?"✓ Done":started?"In progress":"Not started"}</span>`;
+    b.onclick = () => openOutlet(st);
+    list.appendChild(b);
+  });
+  const n = STATIONS.length;
+  $("#hubLine").textContent = `${doneN} of ${n} outlets complete`;
+  $("#hubReviewBtn").disabled = doneN < n;
+  $("#hubHint").textContent = doneN < n ? `Finish all ${n} outlets to send the report. Your progress is saved on this tablet.` : "All outlets done — review and send.";
+}
+$("#hubReviewBtn").onclick = () => { if (allDone()) { renderReview(); show("vReview"); } };
+
+/* ---------- count one outlet ---------- */
+function openOutlet(st){
+  cur = st; const o = S.outlets[st];
+  if (!o.closeTime) o.closeTime = nowHM();
+  $("#closeTime").value = o.closeTime; $("#notes").value = o.notes;
+  renderCount(); show("vCount");
+}
+$("#closeTime").addEventListener("input", e => { S.outlets[cur].closeTime = e.target.value; save(); });
+$("#notes").addEventListener("input", e => { S.outlets[cur].notes = e.target.value; save(); });
+function renderCount(){
+  const wrap = $("#countList"); wrap.innerHTML = "";
+  const m = STATION_META[cur], o = S.outlets[cur];
+  if (m.note) wrap.insertAdjacentHTML("beforeend", `<div class="hint">ℹ️ ${m.note}</div>`);
+  stationData(cur).cats.forEach(c => {
+    const sec = document.createElement("section"); sec.className="cat";
+    sec.innerHTML = `<div class="cat-h"><h3>${c.name}</h3><span class="muted small">${c.items.length} items</span></div>`;
+    c.items.forEach(([name,uom,,cost]) => {
+      const step = isWeight(uom) ? 0.5 : 1;
+      const row = document.createElement("div"); row.className="item";
+      row.innerHTML = `<span class="dot"></span><div class="iname"><b></b><span></span></div>
+        <div class="step"><button type="button" aria-label="less">−</button><input inputmode="decimal" placeholder="—"><button type="button" aria-label="more">+</button></div><span class="uom"></span>`;
+      row.querySelector("b").textContent = name; row.querySelector(".uom").textContent = uom;
+      const sub = row.querySelector(".iname span"), inp = row.querySelector("input"), dot = row.querySelector(".dot");
+      inp.setAttribute("aria-label", `${name} waste in ${uom}`);
+      const paint = () => {
+        const v = o.counts[name];
+        inp.value = v==null ? "" : fmtN(v); dot.className = "dot " + lvl(v);
+        row.classList.toggle("done", v!=null); if (v!=null) row.classList.remove("flash");
+        sub.textContent = settings.showCost ? `${money(cost)}/${uom}` + (v ? ` · ${money(v*cost)}` : "") : "";
+      };
+      const setV = v => { if (v===""||v==null||isNaN(v)) delete o.counts[name]; else o.counts[name]=Math.max(0,Math.round(v*100)/100); o.finished = o.finished && outletTotals(cur).complete; paint(); changed(); };
+      const [minus,plus] = row.querySelectorAll("button");
+      minus.onclick = () => setV(Math.max(0,(o.counts[name]||0)-step));
+      plus.onclick  = () => setV((o.counts[name]||0)+step);
+      inp.addEventListener("change", () => { const t=inp.value.trim().replace(",","."); setV(t===""?null:parseFloat(t)); });
+      inp.addEventListener("focus", () => inp.select());
+      paint(); sec.appendChild(row);
+    });
+    wrap.appendChild(sec);
+  });
+  changed(false);
+}
+function changed(doSave=true){
+  const t = outletTotals(cur);
+  $("#fCounted").textContent = `${t.counted}/${t.total}`;
+  $("#fUnits").textContent = fmtN(t.units); $("#fCost").textContent = money(t.cost);
+  $("#fCostWrap").classList.toggle("hidden", !settings.showCost);
+  $("#prog").style.width = (100*t.counted/t.total)+"%";
+  if (doSave) save();
+}
+$("#zeroRestBtn").onclick = () => { const o=S.outlets[cur]; itemsOf(cur).forEach(i => { if(o.counts[i.name]==null) o.counts[i.name]=0; }); renderCount(); save(); toast("Blank items set to 0"); };
+$("#finishOutletBtn").onclick = () => {
+  const t = outletTotals(cur);
+  if (!t.complete) {
+    const blanks = [...document.querySelectorAll("#countList .item:not(.done)")];
+    blanks.forEach(r => r.classList.add("flash"));
+    blanks[0] && blanks[0].scrollIntoView({behavior:"smooth",block:"center"});
+    toast(`${t.total-t.counted} item${t.total-t.counted>1?"s":""} still blank — enter a number or 0`);
+    return;
+  }
+  S.outlets[cur].finished = true; save();
+  const left = STATIONS.filter(s => !outletDone(s.station)).length;
+  renderHub(); show("vHub");
+  toast(left ? `${STATION_META[cur].label} done ✓ — ${left} outlet${left>1?"s":""} to go` : "All outlets done — review and send");
+};
+
+/* ---------- review ---------- */
+function buildPayload(){
+  const stations = STATIONS.map(s => {
+    const st=s.station, o=S.outlets[st], t=outletTotals(st);
+    return { station:st, stationLabel:STATION_META[st].label, closeTime:o.closeTime, notes:o.notes.trim(),
+      totals:{itemsWasted:t.wasted, units:Math.round(t.units*100)/100, cost:Math.round(t.cost*100)/100},
+      items: t.items.map(i => ({category:i.cat.replace(/^[^A-Za-z0-9]+/,"").trim(), item:i.name, uom:i.uom, qty:o.counts[i.name]||0, costPerUnit:i.cost, cost:Math.round((o.counts[i.name]||0)*i.cost*100)/100, targetPct:i.target})) };
+  });
+  const sum = k => Math.round(stations.reduce((a,s)=>a+s.totals[k],0)*100)/100;
+  return { id: S.id || (S.id = uid()), key: settings.key, chef:S.chef, badge:S.badge, date:S.date,
+    submittedAt:new Date().toISOString(), totals:{itemsWasted:sum("itemsWasted"),units:sum("units"),cost:sum("cost")}, stations };
+}
+function renderReview(){
+  save(); const p = buildPayload(); save();
+  $("#kItems").textContent = p.totals.itemsWasted; $("#kUnits").textContent = fmtN(p.totals.units); $("#kCost").textContent = money(p.totals.cost);
+  $("#kCostBox").classList.toggle("hidden", !settings.showCost);
+  document.querySelector(".kpis").style.gridTemplateColumns = settings.showCost ? "" : "repeat(2,1fr)";
+  $("#revMeta").innerHTML = `<b>All outlets · ${prettyDate(S.date)}</b><br><span class="muted">${esc(S.chef)} (Badge ${esc(S.badge)})</span>`;
+  const c = settings.showCost;
+  $("#revStations").innerHTML = p.stations.map(s => {
+    const m = STATION_META[s.station]; let rows="", lastCat="";
+    s.items.filter(i=>i.qty>0).forEach(i => {
+      if (i.category!==lastCat){ rows += `<tr class="catrow"><td colspan="3">${esc(i.category)}</td></tr>`; lastCat=i.category; }
+      rows += `<tr><td><span class="dot ${lvl(i.qty)}" style="margin-right:8px"></span>${esc(i.item)}</td><td class="n">${fmtN(i.qty)} ${i.uom}</td>${c?`<td class="n">${money(i.cost)}</td>`:""}</tr>`;
+    });
+    if (!rows) rows = `<tr><td colspan="3" class="muted">No waste recorded 🎉</td></tr>`;
+    else rows += `<tr class="tot"><td>Total</td><td class="n">${fmtN(s.totals.units)} units</td>${c?`<td class="n">${money(s.totals.cost)}</td>`:""}</tr>`;
+    return `<div class="card"><div class="st-h"><b>${m.emo} ${m.label}</b><span class="muted small">Closed ${hm12(s.closeTime)}</span></div>
+      <table class="rev">${rows}</table>${s.notes?`<p class="small" style="margin:10px 0 0"><b>Notes:</b> ${esc(s.notes)}</p>`:""}</div>`;
+  }).join("");
+  const hasUrl = !!settings.url;
+  $("#noEndpoint").classList.toggle("hidden", hasUrl);
+  $("#fallbackRow").classList.toggle("hidden", hasUrl);
+  $("#submitBtn").textContent = hasUrl ? "Send report ✉" : "Save & finish";
+}
+$("#editBtn").onclick = () => { renderHub(); show("vHub"); };
+
+/* ---------- submit / outbox ---------- */
+async function post(payload){
+  const res = await fetch(settings.url, {method:"POST", body:JSON.stringify(payload), headers:{"Content-Type":"text/plain;charset=utf-8"}, redirect:"follow"});
+  const txt = await res.text(); let j; try{ j=JSON.parse(txt) }catch(e){ throw new Error("Unexpected reply from email service") }
+  if (!j.ok) throw new Error(j.error || "Email service error");
+  return j;
+}
+const outbox = () => LS.get("wl_outbox",[]);
+function setOutbox(a){ LS.set("wl_outbox",a); paintOutbox(); }
+function paintOutbox(){ const n=outbox().length; $("#outboxPill").classList.toggle("hidden",!n); $("#outboxPill").textContent = `${n} unsent`; }
+async function flushOutbox(){
+  if (!settings.url) return 0; let box = outbox(), sent = 0;
+  for (const p of [...box]) { try { await post(p); box = box.filter(x=>x.id!==p.id); setOutbox(box); sent++; } catch(e){ break; } }
+  return sent;
+}
+function endSession(icon,title,msg){
+  LS.del("wl_session"); S = {chef:S.chef,badge:S.badge,date:todayISO(),outlets:blankOutlets()};
+  $("#doneIcon").textContent=icon; $("#doneTitle").textContent=title; $("#doneMsg").textContent=msg; show("vDone");
+}
+$("#submitBtn").onclick = async () => {
+  if (!allDone()) { renderHub(); show("vHub"); return; }
+  const payload = buildPayload(), btn = $("#submitBtn");
+  if (!settings.url) { LS.set("wl_last",payload); endSession("📋","Count saved on this device","Use “Open in email app” or “Download CSV” to send it — or ask a manager to turn on auto-email."); return; }
+  btn.disabled = true; btn.textContent = "Sending…";
+  try {
+    await post(payload);
+    endSession("✅","Sent to management",`All ${payload.stations.length} outlets for ${prettyDate(payload.date)} were emailed and logged. Thanks, ${payload.chef.split(" ")[0]}!`);
+  } catch (e) {
+    setOutbox([...outbox(), payload]);
+    endSession("📶","Saved — will send automatically",`No connection to the email service right now (${e.message}). The report is saved on this tablet and will send as soon as it's back online.`);
+  } finally { btn.disabled = false; btn.textContent = "Send report ✉"; }
+};
+function toCSV(p){
+  const q = v => `"${String(v).replace(/"/g,'""')}"`;
+  const head = ["Date","Station","Category","Item","UOM","Waste Qty","Cost/Unit","Waste Cost","Chef","Badge","Closing Time","Notes"];
+  const rows = p.stations.flatMap(s => s.items.map(i => [p.date,s.stationLabel,i.category,i.item,i.uom,i.qty,i.costPerUnit,i.cost,p.chef,p.badge,s.closeTime,s.notes].map(q).join(",")));
+  return [head.join(",")].concat(rows).join("\n");
+}
+$("#csvBtn").onclick = () => { const p=buildPayload(); const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([toCSV(p)],{type:"text/csv"})); a.download=`Line_Waste_${p.date}.csv`; a.click(); };
+$("#mailtoBtn").onclick = () => {
+  const p = buildPayload();
+  const parts = p.stations.map(s => `${s.stationLabel.toUpperCase()} (closed ${hm12(s.closeTime)})\n` +
+    (s.items.filter(i=>i.qty>0).map(i=>`- ${i.item}: ${i.qty} ${i.uom} (${money(i.cost)})`).join("\n") || "- No waste") +
+    `\nSubtotal: ${s.totals.units} units · ${money(s.totals.cost)}` + (s.notes?`\nNotes: ${s.notes}`:""));
+  const body = `Food Court Line Waste — ${prettyDate(p.date)}\nChef: ${p.chef} (Badge ${p.badge})\n\n${parts.join("\n\n")}\n\nGRAND TOTAL: ${p.totals.units} units · ${money(p.totals.cost)}`;
+  location.href = `mailto:${encodeURIComponent(CONFIG.FALLBACK_EMAIL)}?subject=${encodeURIComponent(`Line Waste — All Outlets — ${p.date}`)}&body=${encodeURIComponent(body)}`;
+};
+$("#newBtn").onclick = () => { initStart(); show("vStart"); };
+window.addEventListener("online", () => flushOutbox().then(n => n && toast(`${n} saved report${n>1?"s":""} sent`)));
+
+/* ---------- settings ---------- */
+$("#settingsBtn").onclick = () => { $("#pinIn").value=""; $("#pinErr").textContent=""; $("#dlgPin").showModal(); };
+$("#pinCancel").onclick = () => $("#dlgPin").close();
+$("#pinIn").addEventListener("keydown", e => { if(e.key==="Enter") $("#pinOk").click(); });
+$("#pinOk").onclick = () => {
+  if ($("#pinIn").value !== CONFIG.MANAGER_PIN) { $("#pinErr").textContent = "Incorrect PIN"; return; }
+  $("#dlgPin").close();
+  $("#setUrl").value=settings.url; $("#setKey").value=settings.key; $("#setShowCost").checked=settings.showCost;
+  $("#setOutbox").textContent = `${outbox().length} unsent report(s) on this device.`; $("#setMsg").textContent="";
+  $("#dlgSettings").showModal();
+};
+$("#setClose").onclick = () => $("#dlgSettings").close();
+function readSettingsForm(){ settings.url=$("#setUrl").value.trim(); settings.key=$("#setKey").value.trim(); settings.showCost=$("#setShowCost").checked; }
+$("#setSave").onclick = () => { readSettingsForm(); LS.set("wl_settings",settings); $("#dlgSettings").close(); toast("Settings saved");
+  if(view==="vCount") renderCount(); if(view==="vHub") renderHub(); if(view==="vReview") renderReview(); };
+$("#setTest").onclick = async () => {
+  readSettingsForm(); const m=$("#setMsg"); if(!settings.url){ m.textContent="Enter the URL first."; return; }
+  m.style.color="var(--muted)"; m.textContent="Sending test…";
+  try { await post({test:true,key:settings.key,id:uid(),submittedAt:new Date().toISOString()}); m.style.color="var(--green)"; m.textContent="✓ Test email sent — check the management inbox."; }
+  catch(e){ m.style.color="var(--red)"; m.textContent="✗ "+e.message; }
+};
+$("#setRetry").onclick = async () => { readSettingsForm(); const n=await flushOutbox(); $("#setOutbox").textContent=`${outbox().length} unsent report(s) on this device.`; $("#setMsg").textContent = `${n} sent.`; };
+$("#setReset").onclick = () => { S = {chef:"",badge:"",date:todayISO(),outlets:blankOutlets()}; LS.del("wl_session"); $("#dlgSettings").close(); initStart(); show("vStart"); toast("Tonight's count cleared"); };
+
+function toast(msg){ document.querySelectorAll(".toast").forEach(x=>x.remove()); const t=document.createElement("div"); t.className="toast"; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),2800); }
+
+/* ---------- init ---------- */
+function initStart(){
+  const last = LS.get("wl_lastChef",null);
+  $("#chef").value = S.chef || (last && last.chef) || "";
+  $("#badge").value = S.badge || (last && last.badge) || "";
+  $("#bizDate").value = S.date || todayISO();
+  validateStart();
+}
+(function init(){
+  initStart(); paintOutbox(); flushOutbox();
+  const started = STATIONS.some(s => Object.keys(S.outlets[s.station].counts).length);
+  if (started && S.chef && S.badge) { renderHub(); show("vHub"); toast("Picked up where you left off"); }
+})();
+</script>
+</body>
+</html>
