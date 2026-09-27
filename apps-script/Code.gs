@@ -224,14 +224,17 @@ function writeSummary_(sh) {
   const cols = ['E', 'F', 'G', 'H', 'I', 'J', 'K'];
   const rows = blocks.map(label => {
     const b = findBlock_(sh, label);
-    return ['', label, '', ''].concat(cols.map(c => '=' + c + b.costRow), ['', '=M' + b.costRow]);
+    return cols.map(c => '=' + c + b.costRow).concat(['', '=M' + b.costRow]);
   });
+  const labels = blocks.map(l => [l]);
   const totalRow = 5 + rows.length;
-  rows.push(['', 'ALL OUTLETS', '', ''].concat(cols.map(c => '=SUM(' + c + '5:' + c + (totalRow - 1) + ')'), ['', '=SUM(M5:M' + (totalRow - 1) + ')']));
+  rows.push(cols.map(c => '=SUM(' + c + '5:' + c + (totalRow - 1) + ')').concat(['', '=SUM(M5:M' + (totalRow - 1) + ')']));
+  labels.push(['ALL OUTLETS']);
   // make sure summary never overruns the first outlet block
   const firstBlockHead = findBlock_(sh, blocks[0]).head;
   if (5 + rows.length > firstBlockHead - 2) { sh.insertRowsBefore(firstBlockHead, 5 + rows.length - firstBlockHead + 2); return writeSummary_(sh); }
-  sh.getRange(5, 1, rows.length, NCOLS).setFormulas(rows);
+  sh.getRange(5, 2, labels.length, 1).setValues(labels);          // plain text labels
+  sh.getRange(5, DAY_COL, rows.length, 9).setFormulas(rows);     // E–M formulas
   sh.getRange(5, DAY_COL, rows.length, 9).setNumberFormat('$#,##0.00');
   sh.getRange(totalRow, 1, 1, NCOLS).setFontWeight('bold');
 }
