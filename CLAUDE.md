@@ -8,6 +8,7 @@ Chefs use this tablet app for the end-of-night line waste count across the Pecha
 - `docs/SETUP.md` — deployment steps for the manager.
 - `docs/FC - Line Waste Log (template).xlsx` — the original Excel template. The item list, UOMs and cost/unit come from its *📊 Waste Summary* tab.
 - `tools/e2e_test.py` — a Playwright end-to-end test. It fills all 4 outlets, checks that sending is blocked until all are done, and intercepts the POST.
+- `tools/sheet_mock_test.js` — runs `Code.gs` against an in-memory Google Sheets mock: simulates a week of nightly posts (including a re-sent night, a duplicate, a new menu item and a week rollover), then prints the weekly tab and writes `mock_email.html`.
 - `tools/render_email.js` — renders the email HTML from a saved payload by running `Code.gs` in Node with mocked `MailApp`/`Utilities`.
 
 ## Key rules / behavior
@@ -18,6 +19,7 @@ Chefs use this tablet app for the end-of-night line waste count across the Pecha
 - The session (all outlets for one business date) is kept in `localStorage` under `wl_session`. Unsent reports go in `wl_outbox` and are retried on `online` and on load. Before 5 AM, the business date defaults to the previous day.
 - The POST uses `Content-Type: text/plain` so Apps Script needs no CORS preflight.
 - ⚙︎ settings are behind `CONFIG.MANAGER_PIN`. They cover the endpoint URL, shared key, whether chefs see $ costs (off by default), retrying unsent reports, and clearing tonight's count.
+- **Weekly log:** each post also fills a Mon–Sun tab named `Week M-D to M-D`, with the newest tab first. The tab has a week summary at the top, then one block per outlet (`■ Outlet` header, item rows, `Daily Waste Cost ($)`, `Closing Time`, `Counted By (Badge)`). Re-sending a night overwrites that day's column. New menu items are inserted above the block's cost row. The nightly email includes a week-to-date table.
 - Payload shape: `{id, key, chef, badge, date, submittedAt, totals:{itemsWasted,units,cost}, stations:[{station, stationLabel, closeTime, notes, totals, items:[{category,item,uom,qty,costPerUnit,cost,targetPct}]}]}`. If you change it, update `Code.gs` too.
 
 ## Working on it
