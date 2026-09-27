@@ -87,7 +87,7 @@ textarea.inp{min-height:84px;resize:vertical}
 .progress i{display:block;height:100%;background:var(--gold);width:0;transition:width .2s}
 @media(max-width:430px){.step button{width:40px;height:44px;font-size:22px}.step input{width:56px;height:44px}.item{gap:8px;padding:8px}.uom{width:28px;font-size:11px}.iname b{font-size:15px}}
 
-footer.bar{position:sticky;bottom:0;z-index:15;background:rgba(12,22,41,.96);backdrop-filter:blur(6px);border-top:1px solid var(--line);padding:12px 16px calc(12px + env(safe-area-inset-bottom))}
+footer.bar{position:fixed;left:0;right:0;bottom:0;z-index:15;background:rgba(12,22,41,.96);backdrop-filter:blur(6px);border-top:1px solid var(--line);padding:12px 16px calc(12px + env(safe-area-inset-bottom))}
 footer.bar .in{max-width:900px;margin:0 auto;display:flex;gap:12px;align-items:center}
 footer.bar .stats{flex:1;font-size:14px;color:var(--muted)}
 footer.bar .stats b{color:var(--text);font-size:17px}
@@ -160,7 +160,9 @@ dialog::backdrop{background:#000a}
     <h3 style="margin-bottom:8px">Notes for this outlet (optional)</h3>
     <textarea class="inp" id="notes" placeholder="e.g. Slow night — rain. Fryer 2 down at 7pm. Over-prepped for an event that cancelled."></textarea>
   </div>
-  <button class="btn ghost block" id="zeroRestBtn" style="margin-bottom:90px">Mark all remaining blank items as 0</button>
+  <button class="btn ghost block" id="zeroRestBtn" style="margin-bottom:12px">Mark all remaining blank items as 0</button>
+  <button class="btn gold block" id="finishOutletBtn2" style="margin-bottom:12px">Finish this outlet ✓</button>
+  <button class="btn ghost block" id="saveBackBtn" style="margin-bottom:110px">Save & back to outlets</button>
 </main>
 
 <!-- STEP 4: Review all -->
@@ -383,10 +385,12 @@ function changed(doSave=true){
   $("#fUnits").textContent = fmtN(t.units); $("#fCost").textContent = money(t.cost);
   $("#fCostWrap").classList.toggle("hidden", !settings.showCost);
   $("#prog").style.width = (100*t.counted/t.total)+"%";
+  const left = t.total - t.counted;
+  $("#finishOutletBtn2").textContent = left ? `Finish this outlet ✓  (${left} blank)` : "Finish this outlet ✓";
   if (doSave) save();
 }
 $("#zeroRestBtn").onclick = () => { const o=S.outlets[cur]; itemsOf(cur).forEach(i => { if(o.counts[i.name]==null) o.counts[i.name]=0; }); renderCount(); save(); toast("Blank items set to 0"); };
-$("#finishOutletBtn").onclick = () => {
+function finishOutlet(){
   const t = outletTotals(cur);
   if (!t.complete) {
     const blanks = [...document.querySelectorAll("#countList .item:not(.done)")];
@@ -399,7 +403,10 @@ $("#finishOutletBtn").onclick = () => {
   const left = STATIONS.filter(s => !outletDone(s.station)).length;
   renderHub(); show("vHub");
   toast(left ? `${STATION_META[cur].label} done ✓ — ${left} outlet${left>1?"s":""} to go` : "All outlets done — review and send");
-};
+}
+$("#finishOutletBtn").onclick = finishOutlet;
+$("#finishOutletBtn2").onclick = finishOutlet;
+$("#saveBackBtn").onclick = () => { save(); renderHub(); show("vHub"); toast("Progress saved"); };
 
 /* ---------- review ---------- */
 function buildPayload(){
