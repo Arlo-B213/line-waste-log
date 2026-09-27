@@ -10,7 +10,7 @@
  */
 
 // ====== SETTINGS ======
-const RECIPIENTS  = 'manager1@example.com, manager2@example.com'; // management inbox(es)
+const RECIPIENTS  = 'arlo.bedolla@gmail.com'; // management inbox(es), comma-separated
 const CC          = '';                                           // optional
 const SHARED_KEY  = 'pechanga-fc-waste';                          // must match the app
 const AMBER_AT = 5, RED_AT = 10;                                  // template status key
