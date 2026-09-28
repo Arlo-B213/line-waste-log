@@ -454,7 +454,7 @@ function sendWeeklyReport_(ss, sh, late) {
       <div style="font-size:13px;color:#c8d2e4">Pechanga Fried Chicken · Pronto · Little Wok · Agave</div>
     </div>
     <div style="border:1px solid #e5e5e5;border-top:0;padding:16px 20px;border-radius:0 0 10px 10px">
-      ${late ? `<p style="margin:0 0 10px;padding:8px 10px;background:#fde5c0;border-radius:6px;font-size:13px">Sunday's count was not submitted, so this report was sent with the first count of the following week.</p>` : ''}
+      ${late && !logged[6] ? `<p style="margin:0 0 10px;padding:8px 10px;background:#fde5c0;border-radius:6px;font-size:13px">Sunday's count was not submitted, so this report was sent with the first count of the following week.</p>` : ''}
       <table cellspacing="8" style="margin:-8px"><tr>
         ${kpi('Week waste cost', money(weekCost))}${kpi('Items wasted', all.length)}${kpi('Total units', fmtQ(units))}${kpi('Days logged', logged.filter(Boolean).length + ' / 7')}
       </tr></table>
