@@ -10,7 +10,7 @@
  */
 
 // ====== SETTINGS ======
-const RECIPIENTS  = 'arlo.bedolla@gmail.com'; // management inbox(es), comma-separated
+const RECIPIENTS  = 'abedolla@pechanga.com'; // management inbox(es), comma-separated
 const CC          = '';                                           // optional
 const SHARED_KEY  = 'pechanga-fc-waste';                          // must match the app
 const AMBER_AT = 5, RED_AT = 10;                                  // template status key
@@ -349,12 +349,14 @@ function sendReport_(p, sheetUrl, week) {
 /* =====================================================================
    WEEKLY REPORT EMAIL (Mon–Sun) — built from the week tab
    ===================================================================== */
-function weeklySent_(sh) { return String(sh.getRange(3, 1).getValue()).indexOf('Weekly report emailed') === 0; }
+// A week counts as sent only once its full Mon–Sun report has gone out (marker ends with "(complete)").
+function weeklySent_(sh) { const v = String(sh.getRange(3, 1).getValue()); return v.indexOf('Weekly report emailed') === 0 && v.indexOf('(complete)') > 0; }
+function dayLabel_(x) { return x instanceof Date ? Utilities.formatDate(x, TIMEZONE, 'EEE M/d') : String(x); }
 
 function readWeek_(sh) {
   const n = sh.getLastRow();
   const v = sh.getRange(1, 1, n, NCOLS).getValues();
-  const days = v[3].slice(DAY_COL - 1, DAY_COL + 6).map(String);           // row 4 headers
+  const days = v[3].slice(DAY_COL - 1, DAY_COL + 6).map(dayLabel_);        // row 4 headers (Sheets may store these as dates)
   const out = [];
   v.forEach(row => {
     const a = String(row[0]);
@@ -471,15 +473,31 @@ function sendWeeklyReport_(ss, sh, late) {
   </div>`;
 
   const already = weeklySent_(sh);
-  const subject = `${already ? 'UPDATED · ' : ''}Weekly Line Waste · Mon ${range} · ${money(weekCost)}`;
+  const mSun = String(sh.getRange(1, 1).getValue()).match(/Sun (\d+)\/(\d+)\/(\d{4})/);
+  const weekOver = mSun ? new Date() >= new Date(Number(mSun[3]), Number(mSun[1]) - 1, Number(mSun[2]) + 1) : true;
+  const inProgress = !logged[6] && !late && !weekOver;
+  const subject = `${already ? 'UPDATED · ' : ''}${inProgress ? 'Week so far · ' : ''}Weekly Line Waste · Mon ${range} · ${money(weekCost)}`;
   const opts = { to: RECIPIENTS, subject, htmlBody: html, name: 'Food Court Waste Log' };
   if (CC) opts.cc = CC;
   MailApp.sendEmail(opts);
-  sh.getRange(3, 1).setValue('Weekly report emailed ' + Utilities.formatDate(new Date(), TIMEZONE, 'EEE M/d h:mm a'));
+  // Mark the week sent only when the week is over (so a mid-week preview doesn't block Sunday's report)
+  const complete = logged[6] || weekOver;
+  sh.getRange(3, 1).setValue('Weekly report emailed ' + Utilities.formatDate(new Date(), TIMEZONE, 'EEE M/d h:mm a') + (complete ? ' (complete)' : ' (preview)'));
 }
 
-/** Run from the editor to email the current (or most recent) week's report right now. */
+/** Run from the editor to email LAST week's (most recent finished Mon–Sun) report right now. */
 function sendWeeklyReportNow() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const done = ss.getSheets().filter(s => /^Week \d+-\d+ to /.test(s.getName())).map(s => {
+    const m = String(s.getRange(1, 1).getValue()).match(/Sun (\d+)\/(\d+)\/(\d{4})/);
+    return { s, sun: m ? new Date(Number(m[3]), Number(m[1]) - 1, Number(m[2])) : null };
+  }).filter(x => x.sun && x.sun < today).sort((a, b) => b.sun - a.sun);
+  if (done.length) sendWeeklyReport_(ss, done[0].s, false);
+}
+
+/** Run from the editor to email THIS week's numbers so far (a preview; Sunday's report still goes out). */
+function sendThisWeekSoFar() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sh = ss.getSheets().find(s => /^Week \d+-\d+ to /.test(s.getName()));
   if (sh) sendWeeklyReport_(ss, sh, false);

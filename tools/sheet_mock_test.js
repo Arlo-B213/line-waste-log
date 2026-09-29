@@ -15,7 +15,7 @@ function makeSheet(name, id) {
     getLastRow: () => { let n = 0; cells.forEach((row, r) => { if (row && row.some(x => x && (x.v !== '' || x.f !== ''))) n = r; }); return n; },
     getRange(r, c, nr = 1, nc = 1) {
       const rng = {
-        setValues(vals) { vals.forEach((row, i) => row.forEach((v, j) => set(r + i, c + j, { v }))); return rng; },
+        setValues(vals) { vals.forEach((row, i) => row.forEach((v, j) => { const md = typeof v === 'string' && /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) (\d+)\/(\d+)$/.exec(v); set(r + i, c + j, { v: md ? new Date(2026, +md[2] - 1, +md[3]) : v }); })); return rng; }, // HEADER_AS_DATE: real Sheets turns 'Mon 9/21' into a date
         setValue(v) { set(r, c, { v }); return rng; },
         setFormulas(fs) { fs.forEach((row, i) => row.forEach((f, j) => set(r + i, c + j, String(f).startsWith('=') ? { f } : { v: f }))); return rng; },
         setFormula(f) { set(r, c, { f }); return rng; },
@@ -44,10 +44,10 @@ const ruleBuilder = () => { const b = new Proxy({}, { get: (t, k) => k === 'buil
 global.SpreadsheetApp = { getActiveSpreadsheet: () => ss, newConditionalFormatRule: ruleBuilder };
 global.LockService = { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) };
 const mails = []; global.MailApp = { sendEmail: o => mails.push(o) };
-global.Utilities = { formatDate: (d, tz, f) => d.toDateString() };
+global.Utilities = { formatDate: (d, tz, f) => f === 'EEE M/d' ? d.toDateString().slice(0, 3) + ' ' + (d.getMonth() + 1) + '/' + d.getDate() : d.toDateString() };
 global.ContentService = { createTextOutput: t => ({ setMimeType: () => t }), MimeType: { JSON: 'json' } };
 
-eval(fs.readFileSync(path.join(__dirname, '..', 'apps-script', 'Code.gs'), 'utf8') + '\n;global.doPost = doPost; global.SHARED_KEY = SHARED_KEY;');
+eval(fs.readFileSync(path.join(__dirname, '..', 'apps-script', 'Code.gs'), 'utf8') + '\n;global.doPost = doPost; global.SHARED_KEY = SHARED_KEY; global.sendWeeklyReportNow = sendWeeklyReportNow;');
 
 const ITEMS = {
   'Pechanga Fried Chicken': [['Chicken', 'Legs', 'ea.', 0.517], ['Chicken', 'Biscuits', 'ea.', 0.3], ['Panned Sides', 'Corn', 'Lbs.', 1.34]],
@@ -82,3 +82,7 @@ console.log(wk.dump());
 mails.forEach((x, i) => console.log('email', i + 1, '|', x.subject));
 fs.writeFileSync(path.join(out, 'mock_email.html'), mails[0].htmlBody);
 fs.writeFileSync(path.join(out, 'mock_email_late.html'), mails[mails.length - 1].htmlBody);
+// Manual "send last week now" must pick the most recent FINISHED week, not the newest tab
+global.sendWeeklyReportNow = sendWeeklyReportNow;
+const before = mails.length; sendWeeklyReportNow();
+console.log('sendWeeklyReportNow ->', mails.length > before ? mails[mails.length - 1].subject : '(nothing sent)');
