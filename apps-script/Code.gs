@@ -395,9 +395,6 @@ function sendWeeklyReport_(ss, sh, late) {
   const money = n => '$' + Number(n).toFixed(2);
   const fmtQ = q => (Math.round(q * 100) / 100).toString();
   const color = q => q >= RED_AT ? '#d93b3b' : q >= AMBER_AT ? '#e08a00' : '';
-  const td = 'padding:5px 6px;border-bottom:1px solid #f0f0f0';
-  const th = 'padding:5px 6px;font-size:11px;color:#777;font-weight:600;border-bottom:1px solid #ddd';
-  const dayShort = W.days.map(d => d.split(' ')[0]);
 
   // day coverage: a day counts as logged if any outlet has a closing time for it
   const logged = [0, 1, 2, 3, 4, 5, 6].map(i => W.stations.some(s => s.close[i] && s.close[i] !== ''));
@@ -418,58 +415,76 @@ function sendWeeklyReport_(ss, sh, late) {
   const stWeek = W.stations.map((s, i) => ({ label: s.label, cost: stDay[i].reduce((a, b) => a + b, 0) }));
   const topSt = stWeek.slice().sort((a, b) => b.cost - a.cost)[0];
 
-  const kpi = (label, val) => `<td style="padding:10px 14px;background:#f5f1e4;border-radius:8px"><div style="font-size:12px;color:#777">${label}</div><div style="font-size:20px;font-weight:700;color:#0f1b33">${val}</div></td>`;
+  // ---- Phone-first layout: no table wider than 3 columns; full Mon–Sun grid lives in the Sheet ----
+  const NAVY = '#0f1b33', GOLD = '#c9a54a', INK = '#1f2937', MUTE = '#6b7280', LINE = '#eceef2';
+  const cellL = `padding:9px 0;border-bottom:1px solid ${LINE};vertical-align:top`;
+  const cellR = `padding:9px 0 9px 10px;border-bottom:1px solid ${LINE};text-align:right;white-space:nowrap;vertical-align:top`;
+  const h = t => `<div style="margin:26px 0 8px;font-size:12px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:${MUTE}">${t}</div>`;
+  const kpi = (label, val) => `<td width="50%" style="padding:6px"><div style="background:#f6f3ea;border-radius:10px;padding:12px 14px"><div style="font-size:12px;color:${MUTE}">${label}</div><div style="font-size:22px;font-weight:700;color:${NAVY};margin-top:2px">${val}</div></div></td>`;
+  const bar = pct => `<div style="height:5px;background:${LINE};border-radius:5px;margin-top:6px"><div style="height:5px;width:${Math.max(2, Math.round(pct))}%;background:${GOLD};border-radius:5px"></div></div>`;
 
-  const summary = `<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:14px">
-    <tr><th style="${th};text-align:left">Outlet</th>${dayShort.map(d => `<th style="${th};text-align:right">${d}</th>`).join('')}<th style="${th};text-align:right">Week</th></tr>
-    ${W.stations.map((s, i) => `<tr><td style="${td}">${esc_(s.label)}</td>${stDay[i].map((v, d) => `<td style="${td};text-align:right">${logged[d] ? (v ? money(v) : '–') : '<span style="color:#bbb">n/a</span>'}</td>`).join('')}<td style="${td};text-align:right;font-weight:700">${money(stWeek[i].cost)}</td></tr>`).join('')}
-    <tr style="font-weight:700"><td style="padding:6px">All outlets</td>${dayTot.map((v, d) => `<td style="padding:6px;text-align:right">${logged[d] ? money(v) : ''}</td>`).join('')}<td style="padding:6px;text-align:right">${money(weekCost)}</td></tr>
-  </table>`;
+  const outletRows = W.stations.map((s, i) => ({ s, i, cost: stWeek[i].cost })).sort((a, b) => b.cost - a.cost).map(({ s, cost }) => {
+    const pct = weekCost ? 100 * cost / weekCost : 0;
+    return `<tr><td style="${cellL}"><div style="font-weight:600;color:${INK}">${esc_(s.label)}</div>${bar(pct)}</td><td style="${cellR}"><div style="font-weight:700;color:${INK}">${money(cost)}</div><div style="font-size:12px;color:${MUTE}">${Math.round(pct)}%</div></td></tr>`;
+  }).join('');
 
-  const topHtml = top.length ? `<div style="margin-top:20px;font-weight:700;color:#0f1b33">Top ${top.length} items by waste cost</div>
-    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px">
-    ${top.map((t, i) => `<tr><td style="${td};color:#999;width:22px">${i + 1}</td><td style="${td}">${esc_(t.item)} <span style="color:#999">· ${esc_(t.station)}</span></td><td style="${td};text-align:right">${fmtQ(t.qty)} ${esc_(t.uom)}</td><td style="${td};text-align:right;font-weight:600">${money(t.cost)}</td></tr>`).join('')}
-    </table>` : '';
+  const dayRows = W.days.map((d, i) => `<tr><td style="${cellL};color:${INK}">${esc_(d)}${i === worstDay && weekCost ? ` <span style="font-size:11px;font-weight:700;color:#b02a2a;background:#fbe3e1;border-radius:4px;padding:1px 6px;margin-left:4px">Highest</span>` : ''}</td><td style="${cellR};${logged[i] ? `font-weight:600;color:${INK}` : `color:#b02a2a`}">${logged[i] ? money(dayTot[i]) : 'No count'}</td></tr>`).join('');
 
+  const topRows = top.map((t, i) => `<tr><td style="${cellL}"><span style="color:${MUTE};display:inline-block;width:20px">${i + 1}</span><span style="font-weight:600;color:${INK}">${esc_(t.item)}</span><div style="font-size:12px;color:${MUTE};margin-left:20px">${esc_(t.station)} · ${fmtQ(t.qty)} ${esc_(t.uom)}</div></td><td style="${cellR};font-weight:700;color:${INK}">${money(t.cost)}</td></tr>`).join('');
+
+  const dayAbbr = W.days.map(d => d.split(' ')[0]);
   const details = W.stations.map((s, si) => {
     const rows = s.items.filter(it => it.days.some(q => q > 0)).map(it => {
       const q = it.days.reduce((a, b) => a + (b || 0), 0);
-      return `<tr><td style="${td}">${esc_(it.item)}</td>${it.days.map(x => `<td style="${td};text-align:center;${x >= AMBER_AT ? 'color:' + color(x) + ';font-weight:700' : ''}">${x === null ? '' : (x ? fmtQ(x) : '–')}</td>`).join('')}<td style="${td};text-align:right">${fmtQ(q)} <span style="color:#999">${esc_(it.uom)}</span></td><td style="${td};text-align:right;font-weight:600">${money(q * it.cost)}</td></tr>`;
-    }).join('') || `<tr><td colspan="10" style="${td};color:#2e9e62">No waste recorded this week.</td></tr>`;
-    return `<div style="margin-top:20px">
-      <div style="background:#0f1b33;color:#fff;padding:8px 12px;border-radius:6px;font-weight:700">${esc_(s.label)}<span style="float:right;font-weight:400;color:#d4af37">${money(stWeek[si].cost)}</span></div>
-      <table style="width:100%;border-collapse:collapse;font-size:12px">
-        <tr><th style="${th};text-align:left">Item</th>${dayShort.map(d => `<th style="${th}">${d}</th>`).join('')}<th style="${th};text-align:right">Qty</th><th style="${th};text-align:right">Cost</th></tr>
+      const perDay = it.days.map((x, d) => x > 0 ? `<span style="white-space:nowrap;${x >= AMBER_AT ? 'color:' + color(x) + ';font-weight:700' : ''}">${dayAbbr[d]} ${fmtQ(x)}</span>` : '').filter(Boolean).join(' · ');
+      return `<tr><td style="${cellL}"><div style="font-weight:600;color:${INK}">${esc_(it.item)}</div><div style="font-size:12px;color:${MUTE};margin-top:2px;line-height:1.5">${perDay}</div></td><td style="${cellR}"><div style="font-weight:700;color:${INK}">${money(q * it.cost)}</div><div style="font-size:12px;color:${MUTE}">${fmtQ(q)} ${esc_(it.uom)}</div></td></tr>`;
+    }).join('') || `<tr><td colspan="2" style="${cellL};color:#2e9e62">No waste recorded this week.</td></tr>`;
+    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:14px;border-collapse:collapse">
+        <tr><td style="background:${NAVY};color:#fff;padding:9px 12px;border-radius:8px 0 0 8px;font-weight:700">${esc_(s.label)}</td><td style="background:${NAVY};color:${GOLD};padding:9px 12px;border-radius:0 8px 8px 0;text-align:right;font-weight:700;white-space:nowrap">${money(stWeek[si].cost)}</td></tr>
         ${rows}
-      </table></div>`;
+      </table>`;
   }).join('');
 
   const notes = weekNotes_(ss, sh);
-  const notesHtml = notes.length ? `<div style="margin-top:20px;padding:10px 12px;background:#fafafa;border-left:3px solid #d4af37;font-size:13px"><b>Chef notes this week</b><br>${notes.map(n => `<div style="margin-top:4px"><b>${esc_(n.day)} · ${esc_(n.station)}:</b> ${esc_(n.note)} <span style="color:#999">— ${esc_(n.chef)}</span></div>`).join('')}</div>` : '';
+  const notesHtml = notes.length ? h('Chef notes') + `<div style="background:#f9fafb;border-left:3px solid ${GOLD};border-radius:0 8px 8px 0;padding:10px 12px;font-size:13px;color:${INK}">${notes.map(n => `<div style="margin:3px 0"><b>${esc_(n.day)} · ${esc_(n.station)}</b><br>${esc_(n.note)} <span style="color:${MUTE}">— ${esc_(n.chef)}</span></div>`).join('')}</div>` : '';
+
+  const alerts = [];
+  if (late && !logged[6]) alerts.push(`<div style="background:#fdf1dc;color:#8a5a00;border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:13px">Sunday's count wasn't submitted, so this report went out with the first count of the next week.</div>`);
+  if (missing.length) alerts.push(`<div style="background:#fbe3e1;color:#9b2c24;border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:13px"><b>No count submitted:</b> ${missing.map(esc_).join(', ')}</div>`);
+  if (flagged.length) alerts.push(`<div style="background:#fbe3e1;color:#9b2c24;border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:13px"><b>10+ units in a single day:</b> ${flagged.map(i => esc_(i.item) + ' (' + esc_(i.station) + ')').join(', ')}. Review prep / par levels.</div>`);
 
   const range = W.days[0].replace(/^Mon /, '') + ' – ' + W.days[6].replace(/^Sun /, '');
   const html = `
-  <div style="font-family:Segoe UI,Arial,sans-serif;max-width:720px;color:#222">
-    <div style="background:#0f1b33;color:#fff;padding:16px 20px;border-radius:10px 10px 0 0;border-bottom:3px solid #d4af37">
-      <div style="font-size:12px;letter-spacing:1px;color:#d4af37">FOOD COURT · WEEKLY LINE WASTE REPORT</div>
-      <div style="font-size:22px;font-weight:700">Mon ${esc_(range)}</div>
-      <div style="font-size:13px;color:#c8d2e4">Pechanga Fried Chicken · Pronto · Little Wok · Agave</div>
-    </div>
-    <div style="border:1px solid #e5e5e5;border-top:0;padding:16px 20px;border-radius:0 0 10px 10px">
-      ${late && !logged[6] ? `<p style="margin:0 0 10px;padding:8px 10px;background:#fde5c0;border-radius:6px;font-size:13px">Sunday's count was not submitted, so this report was sent with the first count of the following week.</p>` : ''}
-      <table cellspacing="8" style="margin:-8px"><tr>
-        ${kpi('Week waste cost', money(weekCost))}${kpi('Items wasted', all.length)}${kpi('Total units', fmtQ(units))}${kpi('Days logged', logged.filter(Boolean).length + ' / 7')}
-      </tr></table>
-      ${missing.length ? `<p style="margin:12px 0 0;color:#b02a2a">⚠ No count submitted for: ${missing.map(esc_).join(', ')}</p>` : ''}
-      ${topSt && topSt.cost ? `<p style="margin:12px 0 2px">Highest-cost outlet: <b>${esc_(topSt.label)}</b> (${money(topSt.cost)}, ${weekCost ? Math.round(100 * topSt.cost / weekCost) : 0}% of total)</p>` : ''}
-      ${weekCost ? `<p style="margin:2px 0">Highest-waste day: <b>${esc_(W.days[worstDay])}</b> (${money(dayTot[worstDay])})</p>` : ''}
-      ${flagged.length ? `<p style="margin:2px 0;color:#d93b3b">🔴 Hit 10+ units on a single day: ${flagged.map(i => esc_(i.item) + ' – ' + esc_(i.station)).join(', ')}. Review prep / par levels.</p>` : ''}
-      ${summary}
-      ${topHtml}
+  <div style="margin:0;padding:0;background:#f3f4f6">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;background:#f3f4f6"><tr><td align="center" style="padding:12px 8px">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;border-collapse:collapse;background:#ffffff;border-radius:12px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;font-size:14px;line-height:1.45;color:${INK}">
+    <tr><td style="background:${NAVY};border-radius:12px 12px 0 0;padding:18px 18px 16px;border-bottom:3px solid ${GOLD}">
+      <div style="font-size:11px;letter-spacing:1.2px;font-weight:700;color:${GOLD}">FOOD COURT · WEEKLY LINE WASTE</div>
+      <div style="font-size:22px;font-weight:700;color:#ffffff;margin-top:4px">Mon ${esc_(range)}</div>
+      <div style="font-size:13px;color:#c8d2e4;margin-top:2px">PFC · Pronto · Little Wok · Agave</div>
+    </td></tr>
+    <tr><td style="padding:14px 12px 4px">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
+        <tr>${kpi('Week waste cost', money(weekCost))}${kpi('Days logged', logged.filter(Boolean).length + ' / 7')}</tr>
+        <tr>${kpi('Items wasted', all.length)}${kpi('Total units', fmtQ(units))}</tr>
+      </table>
+    </td></tr>
+    <tr><td style="padding:4px 18px 22px">
+      ${alerts.join('')}
+      ${h('By outlet')}
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">${outletRows}
+        <tr><td style="padding:10px 0;font-weight:700">All outlets</td><td style="padding:10px 0 10px 10px;text-align:right;font-weight:700">${money(weekCost)}</td></tr></table>
+      ${h('By day')}
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">${dayRows}</table>
+      ${top.length ? h('Top ' + top.length + ' items by cost') + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">${topRows}</table>` : ''}
+      ${h('Outlet detail')}
+      <div style="font-size:12px;color:${MUTE};margin-top:-2px">Days with waste are listed under each item · <span style="color:#e08a00;font-weight:700">5–9</span> · <span style="color:#d93b3b;font-weight:700">10+</span></div>
       ${details}
       ${notesHtml}
-      <p style="font-size:12px;color:#999;margin-top:18px">🟠 5–9 · 🔴 10+ units in a day · – = counted, no waste &nbsp;|&nbsp; <a href="${ss.getUrl()}#gid=${sh.getSheetId()}" style="color:#8a6d12">Open the ${esc_(sh.getName())} tab</a></p>
-    </div>
+      <div style="margin-top:24px;text-align:center"><a href="${ss.getUrl()}#gid=${sh.getSheetId()}" style="display:inline-block;background:${NAVY};color:#ffffff;text-decoration:none;font-weight:600;padding:11px 18px;border-radius:8px">Open the full Mon–Sun log</a></div>
+    </td></tr>
+  </table>
+  </td></tr></table>
   </div>`;
 
   const already = weeklySent_(sh);
