@@ -44,7 +44,7 @@ header.top{position:sticky;top:0;z-index:20;background:rgba(12,22,41,.86);backdr
 .brand{flex:1;min-width:0;display:flex;align-items:center;gap:12px}
 .logo{width:40px;height:40px;border-radius:12px;background:linear-gradient(150deg,var(--gold-2),var(--gold) 55%,#b58f27);color:var(--gold-ink);display:grid;place-items:center;flex:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 6px 16px -6px rgba(212,175,55,.6)}
 .brand-t{min-width:0}
-.brand-t b{display:block;font-size:17px;font-weight:700;letter-spacing:-.01em;line-height:1.25}
+.brand-t b{display:block;font-size:17px;font-weight:700;letter-spacing:-.01em;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .brand-t small{display:block;color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .iconbtn{width:44px;height:44px;border-radius:12px;border:1px solid var(--border);background:var(--surface);display:grid;place-items:center;color:var(--muted);flex:none;transition:background .15s,color .15s,border-color .15s}
 .iconbtn:active{background:var(--surface-2)}
@@ -234,6 +234,22 @@ table.rev tr.none td{color:var(--muted);border-bottom:0;padding:16px}
 dialog{background:var(--surface);color:var(--text);border:1px solid var(--border-2);border-radius:20px;max-width:500px;width:calc(100% - 32px);padding:24px;box-shadow:0 24px 64px rgba(0,0,0,.55)}
 dialog::backdrop{background:rgba(4,8,18,.72);backdrop-filter:blur(4px)}
 dialog h3{font-size:19px;font-weight:700;text-transform:none;letter-spacing:-.01em;color:var(--text);margin-bottom:16px}
+.helpbtn{display:inline-flex;align-items:center;gap:7px;height:44px;padding:0 14px;border-radius:12px;border:1px solid var(--gold-line);background:var(--gold-soft);color:var(--gold-2);font-size:14px;font-weight:650;flex:none;transition:background .15s,border-color .15s}
+.helpbtn:active{background:rgba(212,175,55,.24)}
+@media(max-width:400px){.helpbtn{width:44px;padding:0;justify-content:center}.helpbtn span{display:none}}
+.howto-card{display:flex;align-items:center;gap:16px;width:100%;margin-top:22px;padding:12px;text-align:left;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);transition:border-color .15s,background .15s}
+.howto-card:active{background:var(--surface-2)}
+.howto-thumb{position:relative;flex:none;width:128px;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:var(--bg-deep);border:1px solid var(--border)}
+.howto-thumb img{display:block;width:100%;height:100%;object-fit:cover}
+.howto-thumb i{position:absolute;inset:0;margin:auto;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:rgba(212,175,55,.92);color:var(--gold-ink);box-shadow:0 6px 16px rgba(0,0,0,.4)}
+.howto-t b{display:block;font-size:15.5px;font-weight:650;line-height:1.3}
+.howto-t small{display:block;margin-top:3px;font-size:13px;color:var(--muted)}
+dialog.vid{max-width:980px;padding:0;overflow:hidden}
+.vid-h{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 12px 12px 20px}
+.vid-h h3{margin:0}
+dialog.vid video{display:block;width:100%;aspect-ratio:16/9;background:#000}
+.vid-err{margin:0;padding:12px 20px 16px}
+@media(hover:hover){.helpbtn:hover{background:rgba(212,175,55,.22)}.howto-card:hover{border-color:var(--border-3);background:#15253f}}
 .check-row{display:flex;gap:12px;align-items:center;margin:0 0 14px;font-size:14.5px;min-height:44px}
 .check-row input{width:22px;height:22px;accent-color:var(--gold)}
 
@@ -275,6 +291,7 @@ dialog h3{font-size:19px;font-weight:700;text-transform:none;letter-spacing:-.01
     <button class="iconbtn" id="backBtn" aria-label="Back" style="visibility:hidden"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
     <div class="brand"><div class="logo" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2.5"/><path d="M9 4V3h6v1"/><path d="M9 13l2 2 4-4"/></svg></div><div class="brand-t"><b>Line Waste Log</b><small id="subtitle">Food Court · Closing count</small></div></div>
     <span class="pill hidden" id="outboxPill"></span>
+    <button class="helpbtn" id="helpBtn" aria-label="Watch the how-to video"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 8.5v7l5.5-3.5z" fill="currentColor"/></svg><span>How to</span></button>
     <button class="iconbtn" id="settingsBtn" aria-label="Manager settings"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
   </div>
   <nav class="steps" id="steps" aria-label="Progress"><span data-s="1"><i>1</i><em>Details</em></span><span data-s="2"><i>2</i><em>Outlets</em></span><span data-s="3"><i>3</i><em>Review</em></span></nav>
@@ -307,6 +324,10 @@ dialog h3{font-size:19px;font-weight:700;text-transform:none;letter-spacing:-.01
   </div>
   <button class="btn gold block" id="startBtn" disabled>Continue</button>
   <p class="hint-line" id="startHint">Enter your name and badge to begin.</p>
+  <button class="howto-card" id="howtoCard" type="button">
+    <span class="howto-thumb"><img src="media/how-to-poster.jpg" alt="" loading="lazy"><i aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg></i></span>
+    <span class="howto-t"><b>New to the count? Watch how it works</b><small>1 minute · with captions</small></span>
+  </button>
 </main>
 
 <!-- STEP 2: Outlet hub -->
@@ -378,6 +399,11 @@ dialog h3{font-size:19px;font-weight:700;text-transform:none;letter-spacing:-.01
 </footer>
 
 <!-- Settings -->
+<dialog id="dlgVideo" class="vid" aria-labelledby="vidTitle">
+  <div class="vid-h"><h3 id="vidTitle">How to do the closing count</h3><button class="iconbtn" id="vidClose" aria-label="Close video"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <video id="howtoVid" controls playsinline preload="none" poster="media/how-to-poster.jpg"><source src="media/how-to.mp4" type="video/mp4"></video>
+  <p class="small muted vid-err hidden" id="vidErr">The video needs an internet connection. Try again when the tablet is online.</p>
+</dialog>
 <dialog id="dlgPin">
   <h3>Manager access</h3>
   <input class="inp" id="pinIn" type="password" inputmode="numeric" placeholder="Manager PIN">
@@ -722,6 +748,16 @@ $("#newBtn").onclick = () => { initStart(); show("vStart"); };
 window.addEventListener("online", () => flushOutbox().then(n => n && toast(`${n} saved report${n>1?"s":""} sent`)));
 
 /* ---------- settings ---------- */
+/* ---------- how-to video ---------- */
+const vid = $("#howtoVid");
+function openHowto(){ $("#vidErr").classList.add("hidden"); $("#dlgVideo").showModal(); vid.play().catch(() => {}); }
+$("#helpBtn").onclick = openHowto;
+$("#howtoCard").onclick = openHowto;
+$("#vidClose").onclick = () => $("#dlgVideo").close();
+$("#dlgVideo").addEventListener("click", e => { if (e.target === e.currentTarget) e.currentTarget.close(); });
+$("#dlgVideo").addEventListener("close", () => vid.pause());
+vid.addEventListener("error", () => $("#vidErr").classList.remove("hidden"), true);
+
 $("#settingsBtn").onclick = () => { $("#pinIn").value=""; $("#pinErr").textContent=""; $("#dlgPin").showModal(); };
 $("#pinCancel").onclick = () => $("#dlgPin").close();
 $("#pinIn").addEventListener("keydown", e => { if(e.key==="Enter") $("#pinOk").click(); });
