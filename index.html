@@ -234,6 +234,15 @@ table.rev tr.none td{color:var(--muted);border-bottom:0;padding:16px}
 dialog{background:var(--surface);color:var(--text);border:1px solid var(--border-2);border-radius:20px;max-width:500px;width:calc(100% - 32px);padding:24px;box-shadow:0 24px 64px rgba(0,0,0,.55)}
 dialog::backdrop{background:rgba(4,8,18,.72);backdrop-filter:blur(4px)}
 dialog h3{font-size:19px;font-weight:700;text-transform:none;letter-spacing:-.01em;color:var(--text);margin-bottom:16px}
+.shift-pick{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:0 0 16px}
+.shift-pick button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-height:64px;padding:12px 14px;text-align:left;border-radius:var(--r-sm);border:1px solid var(--border-2);background:var(--surface);color:var(--text);transition:border-color .15s,background .15s,box-shadow .15s}
+.shift-pick b{font-size:16px;font-weight:700}
+.shift-pick small{font-size:12.5px;color:var(--muted)}
+.shift-pick button[aria-checked="true"]{border-color:var(--gold);background:var(--gold-soft);box-shadow:0 0 0 3px var(--gold-soft)}
+.shift-pick button[aria-checked="true"] b{color:var(--gold-2)}
+@media(max-width:400px){.shift-pick{gap:6px}.shift-pick button{padding:10px}.shift-pick small{font-size:11.5px}}
+.outlet.soon{opacity:.6;cursor:not-allowed}
+.rail-item.soon{opacity:.55;cursor:not-allowed}
 .helpbtn{display:inline-flex;align-items:center;gap:7px;height:44px;padding:0 14px;border-radius:12px;border:1px solid var(--gold-line);background:var(--gold-soft);color:var(--gold-2);font-size:14px;font-weight:650;flex:none;transition:background .15s,border-color .15s}
 .helpbtn:active{background:rgba(212,175,55,.24)}
 @media(max-width:400px){.helpbtn{width:44px;padding:0;justify-content:center}.helpbtn span{display:none}}
@@ -299,10 +308,10 @@ dialog.vid video{display:block;width:100%;aspect-ratio:16/9;background:#000}
 
 <div class="shell">
 <aside class="rail" id="rail" aria-label="Outlets">
-  <p class="rail-h">Tonight's outlets</p>
+  <p class="rail-h" id="railH">Tonight's outlets</p>
   <div class="rail-list" id="railList"></div>
   <div class="rail-sum">
-    <div class="rail-sum-t"><span>Items counted</span><b id="railPct">0%</b></div>
+    <div class="rail-sum-t"><span id="railLbl">Items counted</span><b id="railPct">0%</b></div>
     <div class="meter"><i id="railBar"></i></div>
     <small id="railLine"></small>
   </div>
@@ -310,9 +319,14 @@ dialog.vid video{display:block;width:100%;aspect-ratio:16/9;background:#000}
 
 <!-- STEP 1: Start -->
 <main id="vStart">
-  <p class="eyebrow">Tonight's closing count</p>
+  <p class="eyebrow" id="startEyebrow">Tonight's closing count</p>
   <h1>Line waste</h1>
-  <p class="lead">Count every outlet, then submit. Each night is added to this week's log. Management receives the Monday–Sunday report after Sunday's count.</p>
+  <p class="lead" id="startLead">Count every outlet, then submit. Each night is added to this week's log. Management receives the Monday–Sunday report after Sunday's count.</p>
+  <div class="shift-pick" role="radiogroup" aria-label="Shift">
+    <button type="button" role="radio" data-shift="day"><b>Day</b><small>Shift waste</small></button>
+    <button type="button" role="radio" data-shift="swing"><b>Swing</b><small>Shift waste</small></button>
+    <button type="button" role="radio" data-shift="closing"><b>Closing</b><small>End-of-night count</small></button>
+  </div>
   <div class="card">
     <div class="fields">
       <label class="f">Chef / Sous Chef<input class="inp" id="chef" autocomplete="name" placeholder="First and last name"></label>
@@ -332,7 +346,7 @@ dialog.vid video{display:block;width:100%;aspect-ratio:16/9;background:#000}
 
 <!-- STEP 2: Outlet hub -->
 <main id="vHub" class="hidden">
-  <div class="sec-head"><div><h1 style="margin:0">Outlets</h1><p>Tap an outlet to count it. Progress saves as you go.</p></div><span class="chip" id="hubLine"></span></div>
+  <div class="sec-head"><div><h1 style="margin:0">Outlets</h1><p id="hubSub">Tap an outlet to count it. Progress saves as you go.</p></div><span class="chip" id="hubLine"></span></div>
   <div class="outlets" id="outletList"></div>
   <button class="btn gold block" id="hubReviewBtn" disabled>Review & submit</button>
   <p class="hint-line" id="hubHint"></p>
@@ -341,10 +355,10 @@ dialog.vid video{display:block;width:100%;aspect-ratio:16/9;background:#000}
 <!-- STEP 3: Count one outlet -->
 <main id="vCount" class="hidden">
   <div class="count-head">
-    <div><p class="eyebrow">Counting</p><h1 id="countTitle"></h1></div>
-    <label class="time-field" for="closeTime">Closing time<input class="inp" id="closeTime" type="time"></label>
+    <div><p class="eyebrow" id="countEyebrow">Counting</p><h1 id="countTitle"></h1></div>
+    <label class="time-field" for="closeTime"><span id="timeLbl">Closing time</span><input class="inp" id="closeTime" type="time"></label>
   </div>
-  <div class="help"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg><p>Enter what's being thrown out. Use <b>0</b> if there's no waste. Weights move in 0.5 steps, or type an exact amount.</p></div>
+  <div class="help"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg><p id="helpText">Enter what's being thrown out. Use <b>0</b> if there's no waste. Weights move in 0.5 steps, or type an exact amount.</p></div>
   <div class="legend" id="legend"></div>
   <div id="countList"></div>
   <div class="card">
@@ -360,7 +374,7 @@ dialog.vid video{display:block;width:100%;aspect-ratio:16/9;background:#000}
 
 <!-- STEP 4: Review all -->
 <main id="vReview" class="hidden">
-  <div class="sec-head"><div><h1 style="margin:0">Review</h1><p>Check tonight's numbers, then submit.</p></div></div>
+  <div class="sec-head"><div><h1 style="margin:0">Review</h1><p id="revSub">Check tonight's numbers, then submit.</p></div></div>
   <div class="card meta" id="revMeta"></div>
   <div class="kpis">
     <div class="kpi"><small>Items wasted</small><b id="kItems">0</b></div>
@@ -393,7 +407,7 @@ dialog.vid video{display:block;width:100%;aspect-ratio:16/9;background:#000}
 <footer class="bar hidden" id="countBar">
   <div class="progress"><i id="prog"></i></div>
   <div class="in">
-    <div class="stats"><b id="fCounted">0 of 0</b>counted · <span id="fUnits">0</span> units<span id="fCostWrap"> · <span id="fCost">$0</span></span></div>
+    <div class="stats"><b id="fCounted">0 of 0</b><span id="fLbl">counted</span> · <span id="fUnits">0</span> units<span id="fCostWrap"> · <span id="fCost">$0</span></span></div>
     <button class="btn gold" id="finishOutletBtn">Finish outlet</button>
   </div>
 </footer>
@@ -420,7 +434,7 @@ dialog.vid video{display:block;width:100%;aspect-ratio:16/9;background:#000}
   <p class="small muted" id="setOutbox" style="margin:0 0 4px"></p>
   <p class="small" id="setMsg" style="min-height:18px;margin:0 0 12px"></p>
   <div class="row-actions" style="margin-bottom:10px"><button class="btn ghost" id="setTest">Send test</button><button class="btn ghost" id="setRetry">Retry unsent</button></div>
-  <div class="row-actions" style="margin-bottom:10px"><button class="btn ghost" id="setReset">Clear tonight's count</button></div>
+  <div class="row-actions" style="margin-bottom:10px"><button class="btn ghost" id="setReset">Clear the current count</button></div>
   <div class="row-actions"><button class="btn ghost" id="setClose">Close</button><button class="btn gold" id="setSave">Save</button></div>
 </dialog>
 
@@ -441,11 +455,14 @@ const STATION_META = {
   "PFC Product":   {label:"Pechanga Fried Chicken", mono:"PFC"},
   "Pronto Product":{label:"Pronto",                 mono:"PR"},
   "Little Wok":    {label:"Little Wok",             mono:"LW", note:"Soups: 3 Lbs. = 1 gal"},
-  "Agave":         {label:"Agave",                  mono:"AG"}
+  "Agave":         {label:"Agave",                  mono:"AG"},
+  "American Classic":{label:"American Classic",     mono:"AC"}
 };
 /* Items, units & cost/unit pulled from FC - Line Waste Log.xlsx.
    Format: [item, UOM, target waste %, cost per unit $] */
-const STATIONS = [{"station": "PFC Product", "cats": [{"name": "🍗 Chicken", "items": [["Legs", "ea.", 0.1, 0.517], ["Thighs", "ea.", 0.1, 0.787], ["Wings", "ea.", 0.1, 0.327], ["Breasts", "ea.", 0.1, 3.707], ["Biscuits", "ea.", 0.1, 0.3], ["Popcorn Chicken", "ea.", 0.1, 2.127]]}, {"name": "🥣 Cupped Sides", "items": [["Mashed Potato (cup)", "Lbs.", 0.1, 1.34], ["Mac & Cheese (cup)", "Lbs.", 0.1, 1.34]]}, {"name": "🍲 Panned Sides", "items": [["Mashed Potato (pan)", "Lbs.", 0.1, 1.34], ["Mac & Cheese (pan)", "Lbs.", 0.1, 1.34], ["Coleslaw", "Lbs.", 0.1, 0.6], ["Green Bean / Broccoli", "Lbs.", 0.1, 1.34], ["Corn", "Lbs.", 0.1, 1.34]]}]}, {"station": "Pronto Product", "cats": [{"name": "🍕 Pizza & Mains", "items": [["Pepperoni Pizza", "slice", 0.1, 10.75], ["MeatLover Pizza", "slice", 0.1, 13.45], ["Veggie Pizza", "slice", 0.1, 11.54], ["Specialty Pizza", "slice", 0.1, 15.85], ["Cheese Pizza", "slice", 0.1, 9.14], ["Garlic Bread", "ea.", 0.1, 0.54], ["Lasagna", "pan", 0.1, 2.87], ["Mozzarella Sticks", "ea.", 0.1, 2.44], ["Italian Sausage", "Lbs.", 0.1, 2.92], ["Meatballs", "ea.", 0.1, 2.82]]}]}, {"station": "Little Wok", "cats": [{"name": "🥢 Entrees", "items": [["Chow Mein", "LBS", 0.1, 1.8], ["Fried Rice", "LBS", 0.1, 4.355], ["Steamed Rice", "LBS", 0.1, 3.9], ["Ginger Fish", "LBS", 0.1, 6.245], ["Orange Chicken", "LBS", 0.1, 4], ["Green Bean Chicken", "LBS", 0.1, 1.45], ["Steamed Veggie", "LBS", 0.1, 0.85], ["Beef Broccoli", "LBS", 0.1, 1.03], ["Eggplant Tofu", "LBS", 0.1, 1.75], ["Chili Sweet Shrimp", "LBS", 0.1, 1.49], ["Ribs", "LBS", 0.1, 2.3], ["Teryaki Chicken", "LBS", 0.1, 0.96], ["Spicy Beef", "LBS", 0.1, 1.75], ["Kung Pao Chicken", "LBS", 0.1, 3.17], ["Wallnut Shrimp", "LBS", 0.1, 1.49], ["Beef Galbi", "LBS", 0.1, 12.35], ["Pork Belly", "LBS", 0.1, 6.65]]}, {"name": "🥟 Sides", "items": [["Veggie Eggroll", "Ea.", 0.1, 0.51], ["Chicken Eggroll", "Ea.", 0.1, 1.8], ["Pork Eggroll", "Ea.", 0.1, 0.99], ["Cream Cheese Wontons", "Ea.", 0.1, 2.04], ["Plantains", "Ea.", 0.1, 0.58], ["Butterfly Shrimps", "Ea.", 0.1, 1.15], ["Poke Bowl", "Ea.", 0.1, 7.175]]}, {"name": "🍜 Soups", "items": [["Wonton", "Lbs.", 0.1, 3.036], ["Egg Drop", "Lbs.", 0.1, 0.8]]}]}, {"station": "Agave", "cats": [{"name": "🌮 Proteins", "items": [["Carne Asada", "Lbs.", 0.1, 8.6], ["Chicken Tinga", "Lbs.", 0.1, 2.53], ["Beef Barbacoa", "Lbs.", 0.1, 6.08], ["Ground Beef", "Lbs.", 0.1, 2.5], ["Carnitas", "Lbs.", 0.1, 7.5], ["16/20 Shrimp", "Lbs.", 0.1, 4], ["Breaded Shrimp", "Lbs.", 0.1, 3.5], ["Battered Fish", "Lbs.", 0.1, 2.5]]}, {"name": "🍚 Rice & Beans", "items": [["Spanish Rice", "Lbs.", 0.1, 0.92], ["Cilantro Lime Rice", "Lbs.", 0.1, 0.92], ["Refried Beans", "Lbs.", 0.1, 0.54], ["Black Beans", "Lbs.", 0.1, 1.9]]}, {"name": "🫙 Condiments & Extras", "items": [["Pico de Gallo", "Lbs.", 0.1, 0.61], ["Guacamole", "Lbs.", 0.1, 0.51], ["Sour Cream", "Lbs.", 0.1, 0.57], ["Enchilada Sauce", "Lbs.", 0.1, 2], ["Cheese Sauce", "Lbs.", 0.1, 0.8], ["Chipotle", "Lbs.", 0.1, 0.54], ["Mixed Veggies", "Lbs.", 0.1, 0.28], ["Taco Shell", "ea.", 0.1, 0.15], ["Lettuce", "Lbs.", 0.1, 0.3], ["Cabbage", "Lbs.", 0.1, 0.25], ["Jalapeno", "Lbs.", 0.1, 0.4]]}]}];
+const STATIONS = [{"station": "PFC Product", "cats": [{"name": "🍗 Chicken", "items": [["Legs", "ea.", 0.1, 0.517], ["Thighs", "ea.", 0.1, 0.787], ["Wings", "ea.", 0.1, 0.327], ["Breasts", "ea.", 0.1, 3.707], ["Biscuits", "ea.", 0.1, 0.3], ["Popcorn Chicken", "ea.", 0.1, 2.127]]}, {"name": "🥣 Cupped Sides", "items": [["Mashed Potato (cup)", "Lbs.", 0.1, 1.34], ["Mac & Cheese (cup)", "Lbs.", 0.1, 1.34]]}, {"name": "🍲 Panned Sides", "items": [["Mashed Potato (pan)", "Lbs.", 0.1, 1.34], ["Mac & Cheese (pan)", "Lbs.", 0.1, 1.34], ["Coleslaw", "Lbs.", 0.1, 0.6], ["Green Bean / Broccoli", "Lbs.", 0.1, 1.34], ["Corn", "Lbs.", 0.1, 1.34]]}]}, {"station": "Pronto Product", "cats": [{"name": "🍕 Pizza & Mains", "items": [["Pepperoni Pizza", "slice", 0.1, 10.75], ["MeatLover Pizza", "slice", 0.1, 13.45], ["Veggie Pizza", "slice", 0.1, 11.54], ["Specialty Pizza", "slice", 0.1, 15.85], ["Cheese Pizza", "slice", 0.1, 9.14], ["Garlic Bread", "ea.", 0.1, 0.54], ["Lasagna", "pan", 0.1, 2.87], ["Mozzarella Sticks", "ea.", 0.1, 2.44], ["Italian Sausage", "Lbs.", 0.1, 2.92], ["Meatballs", "ea.", 0.1, 2.82]]}]}, {"station": "Little Wok", "cats": [{"name": "🥢 Entrees", "items": [["Chow Mein", "LBS", 0.1, 1.8], ["Fried Rice", "LBS", 0.1, 4.355], ["Steamed Rice", "LBS", 0.1, 3.9], ["Ginger Fish", "LBS", 0.1, 6.245], ["Orange Chicken", "LBS", 0.1, 4], ["Green Bean Chicken", "LBS", 0.1, 1.45], ["Steamed Veggie", "LBS", 0.1, 0.85], ["Beef Broccoli", "LBS", 0.1, 1.03], ["Eggplant Tofu", "LBS", 0.1, 1.75], ["Chili Sweet Shrimp", "LBS", 0.1, 1.49], ["Ribs", "LBS", 0.1, 2.3], ["Teryaki Chicken", "LBS", 0.1, 0.96], ["Spicy Beef", "LBS", 0.1, 1.75], ["Kung Pao Chicken", "LBS", 0.1, 3.17], ["Wallnut Shrimp", "LBS", 0.1, 1.49], ["Beef Galbi", "LBS", 0.1, 12.35], ["Pork Belly", "LBS", 0.1, 6.65]]}, {"name": "🥟 Sides", "items": [["Veggie Eggroll", "Ea.", 0.1, 0.51], ["Chicken Eggroll", "Ea.", 0.1, 1.8], ["Pork Eggroll", "Ea.", 0.1, 0.99], ["Cream Cheese Wontons", "Ea.", 0.1, 2.04], ["Plantains", "Ea.", 0.1, 0.58], ["Butterfly Shrimps", "Ea.", 0.1, 1.15], ["Poke Bowl", "Ea.", 0.1, 7.175]]}, {"name": "🍜 Soups", "items": [["Wonton", "Lbs.", 0.1, 3.036], ["Egg Drop", "Lbs.", 0.1, 0.8]]}]}, {"station": "Agave", "cats": [{"name": "🌮 Proteins", "items": [["Carne Asada", "Lbs.", 0.1, 8.6], ["Chicken Tinga", "Lbs.", 0.1, 2.53], ["Beef Barbacoa", "Lbs.", 0.1, 6.08], ["Ground Beef", "Lbs.", 0.1, 2.5], ["Carnitas", "Lbs.", 0.1, 7.5], ["16/20 Shrimp", "Lbs.", 0.1, 4], ["Breaded Shrimp", "Lbs.", 0.1, 3.5], ["Battered Fish", "Lbs.", 0.1, 2.5]]}, {"name": "🍚 Rice & Beans", "items": [["Spanish Rice", "Lbs.", 0.1, 0.92], ["Cilantro Lime Rice", "Lbs.", 0.1, 0.92], ["Refried Beans", "Lbs.", 0.1, 0.54], ["Black Beans", "Lbs.", 0.1, 1.9]]}, {"name": "🫙 Condiments & Extras", "items": [["Pico de Gallo", "Lbs.", 0.1, 0.61], ["Guacamole", "Lbs.", 0.1, 0.51], ["Sour Cream", "Lbs.", 0.1, 0.57], ["Enchilada Sauce", "Lbs.", 0.1, 2], ["Cheese Sauce", "Lbs.", 0.1, 0.8], ["Chipotle", "Lbs.", 0.1, 0.54], ["Mixed Veggies", "Lbs.", 0.1, 0.28], ["Taco Shell", "ea.", 0.1, 0.15], ["Lettuce", "Lbs.", 0.1, 0.3], ["Cabbage", "Lbs.", 0.1, 0.25], ["Jalapeno", "Lbs.", 0.1, 0.4]]}]},
+  /* shiftOnly: logged on Day/Swing shifts only, never part of the closing count. Item list + pricing still to come. */
+  {"station": "American Classic", "shiftOnly": true, "cats": []}];
 
 /* ===================================================================== */
 const $ = s => document.querySelector(s);
@@ -471,14 +488,32 @@ const ICON = {
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)+Math.random().toString(36).slice(2));
 function prettyDate(iso){ const [y,m,d]=iso.split("-").map(Number); return new Date(y,m-1,d).toLocaleDateString(undefined,{weekday:"short",month:"numeric",day:"numeric"}); }
 
-/* One closing session = all outlets for one business date */
+/* Closing = the required end-of-night count of every outlet.
+   Day / Swing = optional mid-shift logs of only what was thrown out.
+   Each shift keeps its own session so a half-done log never mixes with another. */
+const SHIFTS = {
+  day:     {label:"Day",     noun:"Day shift",     key:"wl_shift_day"},
+  swing:   {label:"Swing",   noun:"Swing shift",   key:"wl_shift_swing"},
+  closing: {label:"Closing", noun:"Closing count", key:"wl_session"}
+};
+const guessShift = () => { const h = new Date().getHours(); return h>=5 && h<14 ? "day" : h>=14 && h<20 ? "swing" : "closing"; };
 function blankOutlets(){ const o={}; STATIONS.forEach(s => o[s.station]={counts:{},notes:"",closeTime:"",finished:false}); return o; }
-let S = LS.get("wl_session",null);
-if (!S || !S.outlets) S = {chef:"",badge:"",date:todayISO(),outlets:blankOutlets()};
-STATIONS.forEach(s => { if(!S.outlets[s.station]) S.outlets[s.station]={counts:{},notes:"",closeTime:"",finished:false}; });
+const blankSession = () => ({chef:"",badge:"",date:todayISO(),outlets:blankOutlets()});
+function loadSession(sh){
+  let s = LS.get(SHIFTS[sh].key,null);
+  if (!s || !s.outlets) s = blankSession();
+  STATIONS.forEach(st => { if(!s.outlets[st.station]) s.outlets[st.station]={counts:{},notes:"",closeTime:"",finished:false}; });
+  return s;
+}
+const hasCounts = s => STATIONS.some(st => Object.keys(s.outlets[st.station].counts).length);
+let shift = LS.get("wl_active_shift",null);
+if (!SHIFTS[shift] || !hasCounts(loadSession(shift))) shift = hasCounts(loadSession("closing")) ? "closing" : guessShift();
+let S = loadSession(shift);
 let cur = null;           // station currently being counted
 let view = "vStart";
-const save = () => LS.set("wl_session",S);
+const save = () => LS.set(SHIFTS[shift].key,S);
+const isShift = () => shift !== "closing";
+const activeStations = () => STATIONS.filter(s => isShift() || !s.shiftOnly);
 
 /* ---------- helpers ---------- */
 const stationData = st => STATIONS.find(s=>s.station===st);
@@ -489,8 +524,10 @@ function outletTotals(st){
   items.forEach(i => { const q=o.counts[i.name]; if(q!=null) counted++; if(q>0){wasted++;units+=q;cost+=q*i.cost;} });
   return {items,units,cost,wasted,counted,total:items.length,complete:counted===items.length};
 }
-const outletDone = st => S.outlets[st].finished && outletTotals(st).complete;
-const allDone = () => STATIONS.every(s => outletDone(s.station));
+const hasItems = st => itemsOf(st).length > 0;
+const outletDone = st => isShift() ? outletTotals(st).wasted > 0 : S.outlets[st].finished && outletTotals(st).complete;
+// Closing: every outlet finished. Shift log: at least one item thrown out somewhere.
+const readyToReview = () => isShift() ? activeStations().some(s => outletDone(s.station)) : activeStations().every(s => outletDone(s.station));
 
 /* ---------- motion ---------- */
 const calm = matchMedia("(prefers-reduced-motion: reduce)");
@@ -514,7 +551,7 @@ function show(v){
   $("#backBtn").style.visibility = ["vHub","vCount","vReview"].includes(v) ? "visible" : "hidden";
   const stepOf = {vStart:1,vHub:2,vCount:2,vReview:3,vDone:4}[v];
   document.querySelectorAll("#steps span").forEach(el => { const n=+el.dataset.s; el.className = n===stepOf ? "on" : (n<stepOf ? "ok" : ""); });
-  let sub = "Food Court · Closing count";
+  let sub = `Food Court · ${SHIFTS[shift].noun}`;
   if (v==="vCount" && cur) sub = `${STATION_META[cur].label} · ${prettyDate(S.date)}`;
   else if (v==="vHub"||v==="vReview") sub = `${prettyDate(S.date)} · ${S.chef}`;
   $("#subtitle").textContent = sub;
@@ -525,20 +562,30 @@ function show(v){
 }
 function renderRail(){
   const list = $("#railList"); list.innerHTML = "";
-  let doneN = 0, counted = 0, total = 0;
-  STATIONS.forEach(s => {
-    const st=s.station, m=STATION_META[st], t=outletTotals(st), done=outletDone(st), isCur = view==="vCount" && st===cur;
-    if (done) doneN++; counted += t.counted; total += t.total;
+  let doneN = 0, counted = 0, total = 0, logged = 0;
+  const stations = activeStations();
+  stations.forEach(s => {
+    const st=s.station, m=STATION_META[st], t=outletTotals(st), done=outletDone(st), isCur = view==="vCount" && st===cur, soon = !hasItems(st);
+    if (done) doneN++; counted += t.counted; total += t.total; logged += t.wasted;
     const b = document.createElement("button"); b.type = "button";
-    b.className = "rail-item" + (done?" done":"") + (isCur?" cur":"");
+    b.className = "rail-item" + (done?" done":"") + (isCur?" cur":"") + (soon?" soon":"");
+    b.disabled = soon;
     if (isCur) b.setAttribute("aria-current","true");
-    b.innerHTML = `<span class="mono sm">${m.mono}</span><div class="info"><b>${m.label}</b><span>${done ? "Done" : `${t.counted} of ${t.total} counted`}</span></div>`;
+    const line = soon ? "Item list coming soon" : isShift() ? (t.wasted ? `${t.wasted} logged` : "Nothing logged") : done ? "Done" : `${t.counted} of ${t.total} counted`;
+    b.innerHTML = `<span class="mono sm">${m.mono}</span><div class="info"><b>${m.label}</b><span>${line}</span></div>`;
     b.onclick = () => { if (view==="vCount") save(); openOutlet(st); };
     list.appendChild(b);
   });
-  const pct = total ? Math.round(100*counted/total) : 0;
-  $("#railPct").textContent = pct + "%"; $("#railBar").style.width = pct + "%";
-  $("#railLine").textContent = `${doneN} of ${STATIONS.length} outlets finished`;
+  $(".rail-sum .meter").classList.toggle("hidden", isShift());
+  $("#railH").textContent = isShift() ? `${SHIFTS[shift].noun} outlets` : "Tonight's outlets";
+  if (isShift()) {
+    $("#railLbl").textContent = "Items logged"; $("#railPct").textContent = logged; $("#railBar").style.width = "0";
+    $("#railLine").textContent = `${doneN} outlet${doneN===1?"":"s"} with waste`;
+  } else {
+    const pct = total ? Math.round(100*counted/total) : 0;
+    $("#railLbl").textContent = "Items counted"; $("#railPct").textContent = pct + "%"; $("#railBar").style.width = pct + "%";
+    $("#railLine").textContent = `${doneN} of ${stations.length} outlets finished`;
+  }
 }
 $("#backBtn").onclick = () => {
   if (view==="vCount") { save(); renderHub(); show("vHub"); }
@@ -554,32 +601,67 @@ function validateStart(){
   $("#startHint").textContent = ok ? "" : "Enter your name and badge to begin.";
 }
 ["chef","badge","bizDate"].forEach(id => $("#"+id).addEventListener("input", validateStart));
-$("#startBtn").onclick = () => { LS.set("wl_lastChef",{chef:S.chef,badge:S.badge}); save(); renderHub(); show("vHub"); };
+$("#startBtn").onclick = () => { LS.set("wl_lastChef",{chef:S.chef,badge:S.badge}); LS.set("wl_active_shift",shift); save(); renderHub(); show("vHub"); };
+
+const CLOSING_LEAD = $("#startLead").textContent;
+function paintShift(){
+  document.querySelectorAll(".shift-pick button").forEach(b => b.setAttribute("aria-checked", String(b.dataset.shift===shift)));
+  $("#startEyebrow").textContent = isShift() ? `${SHIFTS[shift].noun} waste` : "Tonight's closing count";
+  $("#startLead").textContent = isShift()
+    ? "Log only what's thrown out during the shift: pick the outlet, enter what was discarded, submit. The closing count at the end of the night is still required."
+    : CLOSING_LEAD;
+  $("#subtitle").textContent = `Food Court · ${SHIFTS[shift].noun}`;
+}
+document.querySelectorAll(".shift-pick button").forEach(b => b.onclick = () => {
+  if (b.dataset.shift === shift) return;
+  const typed = {chef:$("#chef").value.trim(), badge:$("#badge").value.trim(), date:$("#bizDate").value};
+  save(); shift = b.dataset.shift; S = loadSession(shift);
+  if (!S.chef) S.chef = typed.chef; if (!S.badge) S.badge = typed.badge; if (typed.date) S.date = typed.date;
+  paintShift(); initStart();
+});
 
 /* ---------- hub ---------- */
 function renderHub(){
   const list = $("#outletList"); list.innerHTML = "";
   let doneN = 0;
-  STATIONS.forEach((s,idx) => {
-    const st=s.station, m=STATION_META[st], t=outletTotals(st), done=outletDone(st), started=t.counted>0;
+  const stations = activeStations();
+  stations.forEach((s,idx) => {
+    const st=s.station, m=STATION_META[st], t=outletTotals(st), done=outletDone(st), started=t.counted>0, soon=!hasItems(st);
     if (done) doneN++;
     const b = document.createElement("button");
     b.style.setProperty("--i", idx);
-    b.className = "outlet" + (done?" done":started?" prog":"");
-    const detail = done ? `${t.wasted ? t.wasted+" item"+(t.wasted===1?"":"s")+" · "+fmtN(t.units)+" units" : "No waste"}${settings.showCost?" · "+money(t.cost):""} · ${hm12(S.outlets[st].closeTime)}`
-                 : started ? `${t.counted} of ${t.total} items counted` : `${t.total} items`;
+    const cost = settings.showCost ? " · "+money(t.cost) : "";
+    let detail, badge, fill;
+    if (soon) { detail = "Item list coming soon"; badge = "Soon"; fill = 0; }
+    else if (isShift()) {
+      detail = t.wasted ? `${t.wasted} item${t.wasted===1?"":"s"} logged · ${fmtN(t.units)} units${cost}` : "Tap to log waste";
+      badge = t.wasted ? "Logged" : "Optional"; fill = t.wasted ? 100 : 0;
+    } else {
+      detail = done ? `${t.wasted ? t.wasted+" item"+(t.wasted===1?"":"s")+" · "+fmtN(t.units)+" units" : "No waste"}${cost} · ${hm12(S.outlets[st].closeTime)}`
+             : started ? `${t.counted} of ${t.total} items counted` : `${t.total} items`;
+      badge = done ? "Done" : started ? "In progress" : "To do"; fill = 100*t.counted/t.total;
+    }
+    b.className = "outlet" + (done?" done":started&&!isShift()?" prog":"") + (soon?" soon":"");
+    b.disabled = soon;
     b.innerHTML = `<span class="mono">${m.mono}</span><div class="info"><b>${m.label}</b><span>${detail}</span>
-      <div class="bar"><i style="width:${100*t.counted/t.total}%"></i></div></div>
-      <span class="badge">${done?"Done":started?"In progress":"To do"}</span>`;
+      <div class="bar"><i style="width:${fill}%"></i></div></div>
+      <span class="badge">${badge}</span>`;
     b.onclick = () => openOutlet(st);
     list.appendChild(b);
   });
-  const n = STATIONS.length;
-  $("#hubLine").textContent = `${doneN} of ${n} complete`;
-  $("#hubReviewBtn").disabled = doneN < n;
-  $("#hubHint").textContent = doneN < n ? `Finish all ${n} outlets to submit. Progress saves automatically.` : "All outlets done. Review and submit.";
+  const n = stations.length, ready = readyToReview();
+  $("#hubReviewBtn").disabled = !ready;
+  if (isShift()) {
+    $("#hubSub").textContent = "Tap an outlet and enter only what was thrown out. Skip outlets with no waste.";
+    $("#hubLine").textContent = `${doneN} outlet${doneN===1?"":"s"} logged`;
+    $("#hubHint").textContent = ready ? "Review and submit when you're done." : "Log waste at any outlet to submit. Progress saves automatically.";
+  } else {
+    $("#hubSub").textContent = "Tap an outlet to count it. Progress saves as you go.";
+    $("#hubLine").textContent = `${doneN} of ${n} complete`;
+    $("#hubHint").textContent = ready ? "All outlets done. Review and submit." : `Finish all ${n} outlets to submit. Progress saves automatically.`;
+  }
 }
-$("#hubReviewBtn").onclick = () => { if (allDone()) { renderReview(); show("vReview"); } };
+$("#hubReviewBtn").onclick = () => { if (readyToReview()) { renderReview(); show("vReview"); } };
 
 /* ---------- count one outlet ---------- */
 function openOutlet(st){
@@ -587,6 +669,12 @@ function openOutlet(st){
   if (!o.closeTime) o.closeTime = nowHM();
   $("#closeTime").value = o.closeTime; $("#notes").value = o.notes;
   $("#countTitle").textContent = STATION_META[st].label;
+  $("#countEyebrow").textContent = isShift() ? `${SHIFTS[shift].noun} · log waste` : "Counting";
+  $("#timeLbl").textContent = isShift() ? "Time" : "Closing time";
+  $("#helpText").innerHTML = isShift()
+    ? "Enter only what's being thrown out. Leave everything else blank. Weights move in 0.5 steps, or type an exact amount."
+    : "Enter what's being thrown out. Use <b>0</b> if there's no waste. Weights move in 0.5 steps, or type an exact amount.";
+  $("#zeroRestBtn").classList.toggle("hidden", isShift());
   renderCount(); show("vCount");
 }
 $("#closeTime").addEventListener("input", e => { S.outlets[cur].closeTime = e.target.value; save(); });
@@ -627,18 +715,30 @@ function renderCount(){
 }
 function changed(doSave=true){
   const t = outletTotals(cur);
-  $("#fCounted").textContent = `${t.counted} of ${t.total}`;
   $("#fUnits").textContent = fmtN(t.units); $("#fCost").textContent = money(t.cost);
   $("#fCostWrap").classList.toggle("hidden", !settings.showCost);
-  $("#prog").style.width = (100*t.counted/t.total)+"%";
-  const left = t.total - t.counted;
-  $("#finishOutletBtn2").textContent = left ? `Finish outlet · ${left} blank` : "Finish outlet";
+  if (isShift()) {
+    $("#fCounted").textContent = `${t.wasted} item${t.wasted===1?"":"s"}`; $("#fLbl").textContent = "logged";
+    $("#prog").style.width = "0";
+    $("#finishOutletBtn").textContent = $("#finishOutletBtn2").textContent = "Done with outlet";
+  } else {
+    $("#fCounted").textContent = `${t.counted} of ${t.total}`; $("#fLbl").textContent = "counted";
+    $("#prog").style.width = (100*t.counted/t.total)+"%";
+    const left = t.total - t.counted;
+    $("#finishOutletBtn").textContent = "Finish outlet";
+    $("#finishOutletBtn2").textContent = left ? `Finish outlet · ${left} blank` : "Finish outlet";
+  }
   if (doSave) { save(); bump($("#fCounted")); }
   renderRail();
 }
 $("#zeroRestBtn").onclick = () => { const o=S.outlets[cur]; itemsOf(cur).forEach(i => { if(o.counts[i.name]==null) o.counts[i.name]=0; }); renderCount(); save(); toast("Blank items set to 0"); };
 function finishOutlet(){
   const t = outletTotals(cur);
+  if (isShift()) {
+    save(); renderHub(); show("vHub");
+    toast(t.wasted ? `${STATION_META[cur].label} · ${t.wasted} item${t.wasted===1?"":"s"} logged` : `Nothing logged at ${STATION_META[cur].label}`);
+    return;
+  }
   if (!t.complete) {
     const blanks = [...document.querySelectorAll("#countList .item:not(.done)")];
     blanks.forEach(r => r.classList.add("flash"));
@@ -647,7 +747,7 @@ function finishOutlet(){
     return;
   }
   S.outlets[cur].finished = true; save();
-  const left = STATIONS.filter(s => !outletDone(s.station)).length;
+  const left = activeStations().filter(s => !outletDone(s.station)).length;
   renderHub(); show("vHub");
   toast(left ? `${STATION_META[cur].label} complete · ${left} to go` : "All outlets complete");
 }
@@ -657,14 +757,15 @@ $("#saveBackBtn").onclick = () => { save(); renderHub(); show("vHub"); toast("Pr
 
 /* ---------- review ---------- */
 function buildPayload(){
-  const stations = STATIONS.map(s => {
+  // A shift log carries only the outlets and items that had waste; the closing count carries everything.
+  const stations = activeStations().filter(s => !isShift() || outletDone(s.station)).map(s => {
     const st=s.station, o=S.outlets[st], t=outletTotals(st);
     return { station:st, stationLabel:STATION_META[st].label, closeTime:o.closeTime, notes:o.notes.trim(),
       totals:{itemsWasted:t.wasted, units:Math.round(t.units*100)/100, cost:Math.round(t.cost*100)/100},
-      items: t.items.map(i => ({category:i.cat.replace(/^[^A-Za-z0-9]+/,"").trim(), item:i.name, uom:i.uom, qty:o.counts[i.name]||0, costPerUnit:i.cost, cost:Math.round((o.counts[i.name]||0)*i.cost*100)/100, targetPct:i.target})) };
+      items: t.items.filter(i => !isShift() || o.counts[i.name] > 0).map(i => ({category:i.cat.replace(/^[^A-Za-z0-9]+/,"").trim(), item:i.name, uom:i.uom, qty:o.counts[i.name]||0, costPerUnit:i.cost, cost:Math.round((o.counts[i.name]||0)*i.cost*100)/100, targetPct:i.target})) };
   });
   const sum = k => Math.round(stations.reduce((a,s)=>a+s.totals[k],0)*100)/100;
-  return { id: S.id || (S.id = uid()), key: settings.key, chef:S.chef, badge:S.badge, date:S.date,
+  return { id: S.id || (S.id = uid()), key: settings.key, shift, chef:S.chef, badge:S.badge, date:S.date,
     submittedAt:new Date().toISOString(), totals:{itemsWasted:sum("itemsWasted"),units:sum("units"),cost:sum("cost")}, stations };
 }
 function renderReview(){
@@ -673,7 +774,8 @@ function renderReview(){
   document.querySelectorAll(".kpi").forEach((k,i) => k.style.setProperty("--i", i));
   $("#kCostBox").classList.toggle("hidden", !settings.showCost);
   document.querySelector(".kpis").style.gridTemplateColumns = settings.showCost ? "" : "repeat(2,1fr)";
-  $("#revMeta").innerHTML = `<div style="flex:1"><b>${prettyDate(S.date)} · All outlets</b><span class="muted small">${esc(S.chef)} · Badge ${esc(S.badge)}</span></div>`;
+  $("#revMeta").innerHTML = `<div style="flex:1"><b>${prettyDate(S.date)} · ${isShift() ? SHIFTS[shift].noun : "All outlets"}</b><span class="muted small">${esc(S.chef)} · Badge ${esc(S.badge)}</span></div>`;
+  $("#revSub").textContent = isShift() ? "Check what was thrown out this shift, then submit." : "Check tonight's numbers, then submit.";
   const c = settings.showCost;
   $("#revStations").innerHTML = p.stations.map((s,idx) => {
     const m = STATION_META[s.station]; let rows="", lastCat="", cols = c ? 3 : 2;
@@ -683,14 +785,15 @@ function renderReview(){
     });
     if (!rows) rows = `<tr class="none"><td colspan="${cols}">No waste recorded</td></tr>`;
     else rows += `<tr class="tot"><td>Total</td><td class="n">${fmtN(s.totals.units)} units</td>${c?`<td class="n">${money(s.totals.cost)}</td>`:""}</tr>`;
-    return `<div class="card st-card" style="--i:${idx+3}"><div class="st-h"><span class="mono sm">${m.mono}</span><b>${m.label}</b><span>Closed ${hm12(s.closeTime)}</span></div>
+    return `<div class="card st-card" style="--i:${idx+3}"><div class="st-h"><span class="mono sm">${m.mono}</span><b>${m.label}</b><span>${isShift() ? "Logged" : "Closed"} ${hm12(s.closeTime)}</span></div>
       <table class="rev">${rows}</table>${s.notes?`<div class="st-notes"><b>Notes</b> · ${esc(s.notes)}</div>`:""}</div>`;
   }).join("");
   const hasUrl = !!settings.url;
   $("#noEndpoint").classList.toggle("hidden", hasUrl);
   $("#fallbackRow").classList.toggle("hidden", hasUrl);
-  $("#submitBtn").textContent = hasUrl ? "Submit count" : "Save & finish";
+  $("#submitBtn").textContent = submitLabel();
 }
+const submitLabel = () => !settings.url ? "Save & finish" : isShift() ? `Submit ${SHIFTS[shift].label.toLowerCase()} log` : "Submit count";
 $("#editBtn").onclick = () => { renderHub(); show("vHub"); };
 
 /* ---------- submit / outbox ---------- */
@@ -709,40 +812,46 @@ async function flushOutbox(){
   return sent;
 }
 function endSession(icon,title,msg){
-  LS.del("wl_session"); S = {chef:S.chef,badge:S.badge,date:todayISO(),outlets:blankOutlets()};
+  LS.del(SHIFTS[shift].key); S = Object.assign(blankSession(), {chef:S.chef,badge:S.badge});
   const di=$("#doneIcon"); di.innerHTML = icon==="ok" ? ICON.check : ICON.clock; di.className = "done-icon" + (icon==="ok" ? "" : " warn"); $("#doneTitle").textContent=title; $("#doneMsg").textContent=msg; show("vDone");
 }
 $("#submitBtn").onclick = async () => {
-  if (!allDone()) { renderHub(); show("vHub"); return; }
-  const payload = buildPayload(), btn = $("#submitBtn");
+  if (!readyToReview()) { renderHub(); show("vHub"); return; }
+  const payload = buildPayload(), btn = $("#submitBtn"), first = payload.chef.split(" ")[0];
   if (!settings.url) { LS.set("wl_last",payload); endSession("wait","Saved on this device","Use “Open in email app” or “Download CSV” to send it — or ask a manager to turn on auto-email."); return; }
   btn.disabled = true; btn.textContent = "Sending…";
   try {
     await post(payload);
-    const isSun = new Date(payload.date + "T12:00:00").getDay() === 0;
-    endSession("ok", isSun ? "Week complete" : "Count submitted",
-      `All ${payload.stations.length} outlets for ${prettyDate(payload.date)} were added to this week's log.` +
-      (isSun ? " That finishes Monday–Sunday, so the weekly report is on its way to management." : " The weekly report goes to management after Sunday's count.") +
-      ` Thanks, ${payload.chef.split(" ")[0]}!`);
+    if (isShift()) {
+      const n = payload.stations.length;
+      endSession("ok", `${SHIFTS[shift].noun} logged`,
+        `Waste from ${n} outlet${n===1?"":"s"} on ${prettyDate(payload.date)} was added to the shift log. The closing count is still done at the end of the night. Thanks, ${first}!`);
+    } else {
+      const isSun = new Date(payload.date + "T12:00:00").getDay() === 0;
+      endSession("ok", isSun ? "Week complete" : "Count submitted",
+        `All ${payload.stations.length} outlets for ${prettyDate(payload.date)} were added to this week's log.` +
+        (isSun ? " That finishes Monday–Sunday, so the weekly report is on its way to management." : " The weekly report goes to management after Sunday's count.") +
+        ` Thanks, ${first}!`);
+    }
   } catch (e) {
     setOutbox([...outbox(), payload]);
-    endSession("wait","Saved — will send automatically",`No connection right now. Tonight's count is saved on this phone and will send as soon as it's back online.`);
-  } finally { btn.disabled = false; btn.textContent = "Submit count"; }
+    endSession("wait","Saved — will send automatically",`No connection right now. This ${isShift() ? "shift log" : "count"} is saved on this tablet and will send as soon as it's back online.`);
+  } finally { btn.disabled = false; btn.textContent = submitLabel(); }
 };
 function toCSV(p){
   const q = v => `"${String(v).replace(/"/g,'""')}"`;
-  const head = ["Date","Station","Category","Item","UOM","Waste Qty","Cost/Unit","Waste Cost","Chef","Badge","Closing Time","Notes"];
-  const rows = p.stations.flatMap(s => s.items.map(i => [p.date,s.stationLabel,i.category,i.item,i.uom,i.qty,i.costPerUnit,i.cost,p.chef,p.badge,s.closeTime,s.notes].map(q).join(",")));
+  const head = ["Date","Shift","Station","Category","Item","UOM","Waste Qty","Cost/Unit","Waste Cost","Chef","Badge","Time","Notes"];
+  const rows = p.stations.flatMap(s => s.items.map(i => [p.date,SHIFTS[p.shift].label,s.stationLabel,i.category,i.item,i.uom,i.qty,i.costPerUnit,i.cost,p.chef,p.badge,s.closeTime,s.notes].map(q).join(",")));
   return [head.join(",")].concat(rows).join("\n");
 }
-$("#csvBtn").onclick = () => { const p=buildPayload(); const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([toCSV(p)],{type:"text/csv"})); a.download=`Line_Waste_${p.date}.csv`; a.click(); };
+$("#csvBtn").onclick = () => { const p=buildPayload(); const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([toCSV(p)],{type:"text/csv"})); a.download=`Line_Waste_${p.date}_${SHIFTS[p.shift].label}.csv`; a.click(); };
 $("#mailtoBtn").onclick = () => {
   const p = buildPayload();
   const parts = p.stations.map(s => `${s.stationLabel.toUpperCase()} (closed ${hm12(s.closeTime)})\n` +
     (s.items.filter(i=>i.qty>0).map(i=>`- ${i.item}: ${i.qty} ${i.uom} (${money(i.cost)})`).join("\n") || "- No waste") +
     `\nSubtotal: ${s.totals.units} units · ${money(s.totals.cost)}` + (s.notes?`\nNotes: ${s.notes}`:""));
-  const body = `Food Court Line Waste — ${prettyDate(p.date)}\nChef: ${p.chef} (Badge ${p.badge})\n\n${parts.join("\n\n")}\n\nGRAND TOTAL: ${p.totals.units} units · ${money(p.totals.cost)}`;
-  location.href = `mailto:${encodeURIComponent(CONFIG.FALLBACK_EMAIL)}?subject=${encodeURIComponent(`Line Waste — All Outlets — ${p.date}`)}&body=${encodeURIComponent(body)}`;
+  const body = `Food Court Line Waste — ${SHIFTS[p.shift].noun} — ${prettyDate(p.date)}\nChef: ${p.chef} (Badge ${p.badge})\n\n${parts.join("\n\n")}\n\nGRAND TOTAL: ${p.totals.units} units · ${money(p.totals.cost)}`;
+  location.href = `mailto:${encodeURIComponent(CONFIG.FALLBACK_EMAIL)}?subject=${encodeURIComponent(`Line Waste — ${SHIFTS[p.shift].noun} — ${p.date}`)}&body=${encodeURIComponent(body)}`;
 };
 $("#newBtn").onclick = () => { initStart(); show("vStart"); };
 window.addEventListener("online", () => flushOutbox().then(n => n && toast(`${n} saved report${n>1?"s":""} sent`)));
@@ -779,7 +888,7 @@ $("#setTest").onclick = async () => {
   catch(e){ m.style.color="var(--red)"; m.textContent="✗ "+e.message; }
 };
 $("#setRetry").onclick = async () => { readSettingsForm(); const n=await flushOutbox(); $("#setOutbox").textContent=`${outbox().length} unsent report(s) on this device.`; $("#setMsg").textContent = `${n} sent.`; };
-$("#setReset").onclick = () => { S = {chef:"",badge:"",date:todayISO(),outlets:blankOutlets()}; LS.del("wl_session"); $("#dlgSettings").close(); initStart(); show("vStart"); toast("Tonight's count cleared"); };
+$("#setReset").onclick = () => { S = blankSession(); LS.del(SHIFTS[shift].key); $("#dlgSettings").close(); initStart(); show("vStart"); toast(`${SHIFTS[shift].noun} cleared`); };
 
 function toast(msg){ document.querySelectorAll(".toast").forEach(x=>x.remove()); const t=document.createElement("div"); t.className="toast"; t.textContent=msg; document.body.appendChild(t); requestAnimationFrame(()=>t.classList.add("show")); setTimeout(()=>t.classList.remove("show"),2400); setTimeout(()=>t.remove(),2700); }
 
@@ -795,9 +904,8 @@ $("#legend").innerHTML = `<span><i class="lv"></i>Under ${CONFIG.AMBER_AT}</span
 const setHdr = () => document.documentElement.style.setProperty("--hdr", $("header.top").offsetHeight + "px");
 window.addEventListener("resize", setHdr);
 (function init(){
-  setHdr(); initStart(); paintOutbox(); flushOutbox();
-  const started = STATIONS.some(s => Object.keys(S.outlets[s.station].counts).length);
-  if (started && S.chef && S.badge) { renderHub(); show("vHub"); toast("Picked up where you left off"); }
+  setHdr(); paintShift(); initStart(); paintOutbox(); flushOutbox();
+  if (hasCounts(S) && S.chef && S.badge) { renderHub(); show("vHub"); toast("Picked up where you left off"); }
   else show("vStart");
 })();
 </script>

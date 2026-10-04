@@ -11,6 +11,8 @@ with sync_playwright() as p:
     pg.goto(pathlib.Path(__file__).resolve().parents[1].joinpath('index.html').as_uri())
     pg.evaluate("localStorage.setItem('wl_settings',JSON.stringify({url:'https://script.google.com/macros/s/X/exec',key:'pechanga-fc-waste',showCost:false}))")
     pg.reload()
+    pg.click('[data-shift="closing"]')
+    print('American Classic hidden on closing:', pg.locator('.outlet:has-text("American Classic")').count()==0)
     pg.fill('#chef','Test Chef'); pg.fill('#badge','12345'); pg.click('#startBtn')
     names=['Pechanga Fried Chicken','Pronto','Little Wok','Agave']
     for k,n in enumerate(names):
@@ -34,3 +36,19 @@ with sync_playwright() as p:
     print('errs',errs, 'posts',len(got))
     g=got[0]; print(g['totals'], [(s['stationLabel'],s['totals'],s['closeTime']) for s in g['stations']])
     json.dump(g,open(out+'payload2.json','w'))
+
+    # Day shift: optional, only what was thrown out, American Classic listed (item list pending)
+    pg.click('#newBtn'); pg.click('[data-shift="day"]')
+    pg.fill('#chef','Day Chef'); pg.fill('#badge','777'); pg.click('#startBtn')
+    ac = pg.locator('.outlet:has-text("American Classic")')
+    print('day: AC listed', ac.count()==1, 'AC disabled', ac.is_disabled(), 'review disabled before waste', pg.is_disabled('#hubReviewBtn'))
+    pg.click('.outlet:has-text("Pronto")')
+    items=pg.locator('#countList .item')
+    items.nth(0).locator('input').fill('2'); items.nth(0).locator('input').press('Tab')
+    items.nth(4).locator('input').fill('1'); items.nth(4).locator('input').press('Tab')
+    pg.click('#finishOutletBtn')
+    print('day: back on hub', pg.is_visible('#vHub'), 'review enabled', not pg.is_disabled('#hubReviewBtn'))
+    pg.click('#hubReviewBtn'); pg.screenshot(path=out+'b_shift_review.png',full_page=True)
+    pg.click('#submitBtn'); pg.wait_for_selector('#vDone:not(.hidden)')
+    d=got[-1]
+    print('day payload:', d['shift'], [(s['stationLabel'],[(i['item'],i['qty']) for i in s['items']]) for s in d['stations']], 'posts', len(got), 'errs', errs)

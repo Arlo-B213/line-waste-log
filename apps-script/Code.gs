@@ -36,6 +36,8 @@ function doPost(e) {
     if (!p.stations || !p.stations.length) return json_({ ok: false, error: 'No outlets in report' });
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
+    // Day / Swing logs are kept apart from the closing count: own tab, own email section, never in the week tab totals.
+    if ((p.shift || 'closing') !== 'closing') return json_(logShift_(ss, p));
     const subs = sheet_(ss, SUB_SHEET, ['Submission ID','Submitted At','Business Date','Station','Closing Time','Chef','Badge #','Items Wasted','Total Units','Waste Cost ($)','Notes']);
 
     // Ignore duplicates (the app retries when the tablet was offline)
@@ -70,6 +72,35 @@ function doPost(e) {
 }
 
 function doGet() { return json_({ ok: true, service: 'Line Waste Log' }); }
+
+/* =====================================================================
+   SHIFT LOG — optional Day / Swing waste, one row per discarded item.
+   ===================================================================== */
+const SHIFT_SHEET = 'Shift Log';
+const SHIFT_LABEL = { day: 'Day', swing: 'Swing' };
+
+function logShift_(ss, p) {
+  const sh = sheet_(ss, SHIFT_SHEET, ['Submission ID','Submitted At','Business Date','Shift','Station','Category','Item','UOM','Waste Qty','Cost/Unit ($)','Waste Cost ($)','Time','Chef','Badge #','Notes']);
+  const ids = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues().flat() : [];
+  if (ids.indexOf(p.id) !== -1) return { ok: true, duplicate: true };
+  const label = SHIFT_LABEL[p.shift] || String(p.shift);
+  const submitted = new Date(p.submittedAt);
+  const rows = [];
+  p.stations.forEach(s => s.items.filter(i => i.qty > 0).forEach(i =>
+    rows.push([p.id, submitted, p.date, label, s.stationLabel, i.category, i.item, i.uom, i.qty, i.costPerUnit, i.cost,
+      hm12_(s.closeTime), p.chef, "'" + p.badge, s.notes || ''])));
+  if (!rows.length) return { ok: false, error: 'No waste in shift log' };
+  sh.getRange(sh.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+  return { ok: true, shift: label };
+}
+
+function weekShifts_(ss, sh) {
+  const log = ss.getSheetByName(SHIFT_SHEET); if (!log || log.getLastRow() < 2) return [];
+  const wk = weekBounds_(sh); if (!wk) return [];
+  return log.getRange(2, 1, log.getLastRow() - 1, 15).getValues()
+    .map(r => ({ d: dateOnly_(r[2]), shift: String(r[3]), station: String(r[4]), item: String(r[6]), uom: String(r[7]), qty: Number(r[8]) || 0, cost: Number(r[10]) || 0 }))
+    .filter(x => x.d && x.d >= wk.mon && x.d <= wk.sun && x.qty > 0);
+}
 
 /* =====================================================================
    WEEKLY LOG (Mon–Sun) — one tab per week, laid out like the Excel
@@ -375,15 +406,24 @@ function readWeek_(sh) {
   return { days, stations: out };
 }
 
+function weekBounds_(sh) {
+  const m = String(sh.getRange(1, 1).getValue()).match(/Sun (\d+)\/(\d+)\/(\d{4})/); if (!m) return null;
+  const sun = new Date(Number(m[3]), Number(m[1]) - 1, Number(m[2]));
+  return { mon: new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() - 6), sun };
+}
+// Sheets may store a business date as a Date or keep the ISO string.
+function dateOnly_(x) {
+  if (x instanceof Date) return new Date(x.getFullYear(), x.getMonth(), x.getDate());
+  const s = String(x);
+  return /^\d{4}-\d{2}-\d{2}/.test(s) ? new Date(Number(s.slice(0, 4)), Number(s.slice(5, 7)) - 1, Number(s.slice(8, 10))) : null;
+}
+
 function weekNotes_(ss, sh) {
   const subs = ss.getSheetByName(SUB_SHEET); if (!subs || subs.getLastRow() < 2) return [];
-  const title = String(sh.getRange(1, 1).getValue());
-  const m = title.match(/Sun (\d+)\/(\d+)\/(\d{4})/); if (!m) return [];
-  const sun = new Date(Number(m[3]), Number(m[1]) - 1, Number(m[2]));
-  const mon = new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() - 6);
+  const wk = weekBounds_(sh); if (!wk) return [];
+  const { mon, sun } = wk;
   const rows = subs.getRange(2, 1, subs.getLastRow() - 1, 11).getValues();
-  const toDate = x => x instanceof Date ? new Date(x.getFullYear(), x.getMonth(), x.getDate())
-    : (String(x).match(/^\d{4}-\d{2}-\d{2}/) ? new Date(Number(String(x).slice(0, 4)), Number(String(x).slice(5, 7)) - 1, Number(String(x).slice(8, 10))) : null);
+  const toDate = dateOnly_;
   const seen = {};
   return rows.filter(r => { const d = toDate(r[2]); return d && d >= mon && d <= sun && String(r[10]).trim(); })
     .map(r => { const d = toDate(r[2]); return { day: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()] + ' ' + md_(d), station: r[3], chef: r[5], note: String(r[10]).trim() }; })
@@ -448,6 +488,29 @@ function sendWeeklyReport_(ss, sh, late) {
   const notes = weekNotes_(ss, sh);
   const notesHtml = notes.length ? h('Chef notes') + `<div style="background:#f9fafb;border-left:3px solid ${GOLD};border-radius:0 8px 8px 0;padding:10px 12px;font-size:13px;color:${INK}">${notes.map(n => `<div style="margin:3px 0"><b>${esc_(n.day)} · ${esc_(n.station)}</b><br>${esc_(n.note)} <span style="color:${MUTE}">— ${esc_(n.chef)}</span></div>`).join('')}</div>` : '';
 
+  // Day & Swing shift waste: reported on its own, never added into the closing totals above.
+  const sw = weekShifts_(ss, sh);
+  let shiftsHtml = '';
+  if (sw.length) {
+    const sumBy = (key) => { const o = {}; sw.forEach(x => { const k = x[key]; o[k] = o[k] || { cost: 0, qty: 0 }; o[k].cost += x.cost; o[k].qty += x.qty; }); return o; };
+    const byShift = sumBy('shift'), bySt = sumBy('station');
+    const items = {}; sw.forEach(x => { const k = x.station + '|' + x.item; items[k] = items[k] || { station: x.station, item: x.item, uom: x.uom, qty: 0, cost: 0 }; items[k].qty += x.qty; items[k].cost += x.cost; });
+    const swTop = Object.keys(items).map(k => items[k]).sort((a, b) => b.cost - a.cost).slice(0, 5);
+    const swTotal = sw.reduce((a, x) => a + x.cost, 0);
+    const row = (l, cost, sub) => `<tr><td style="${cellL};color:${INK}">${l}</td><td style="${cellR}"><div style="font-weight:700;color:${INK}">${money(cost)}</div>${sub ? `<div style="font-size:12px;color:${MUTE}">${sub}</div>` : ''}</td></tr>`;
+    shiftsHtml = h('Day &amp; Swing shifts') +
+      `<div style="font-size:12px;color:${MUTE};margin-top:-2px">Waste logged during the shift. Not included in the totals above.</div>` +
+      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:6px;border-collapse:collapse">` +
+      ['Day', 'Swing'].filter(s => byShift[s]).map(s => row(`<b>${s} shift</b>`, byShift[s].cost, fmtQ(byShift[s].qty) + ' units')).join('') +
+      `<tr><td style="padding:10px 0;font-weight:700">Shift total</td><td style="padding:10px 0 10px 10px;text-align:right;font-weight:700">${money(swTotal)}</td></tr></table>` +
+      `<div style="font-size:12px;font-weight:600;color:${MUTE};margin:12px 0 2px">By outlet</div>` +
+      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">` +
+      Object.keys(bySt).sort((a, b) => bySt[b].cost - bySt[a].cost).map(s => row(esc_(s), bySt[s].cost, '')).join('') + `</table>` +
+      `<div style="font-size:12px;font-weight:600;color:${MUTE};margin:12px 0 2px">Top items</div>` +
+      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">` +
+      swTop.map(t => row(`<span style="font-weight:600">${esc_(t.item)}</span><div style="font-size:12px;color:${MUTE}">${esc_(t.station)} · ${fmtQ(t.qty)} ${esc_(t.uom)}</div>`, t.cost, '')).join('') + `</table>`;
+  }
+
   const alerts = [];
   if (late && !logged[6]) alerts.push(`<div style="background:#fdf1dc;color:#8a5a00;border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:13px">Sunday's count wasn't submitted, so this report went out with the first count of the next week.</div>`);
   if (missing.length) alerts.push(`<div style="background:#fbe3e1;color:#9b2c24;border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:13px"><b>No count submitted:</b> ${missing.map(esc_).join(', ')}</div>`);
@@ -480,6 +543,7 @@ function sendWeeklyReport_(ss, sh, late) {
       ${h('Outlet detail')}
       <div style="font-size:12px;color:${MUTE};margin-top:-2px">Days with waste are listed under each item · <span style="color:#e08a00;font-weight:700">5–9</span> · <span style="color:#d93b3b;font-weight:700">10+</span></div>
       ${details}
+      ${shiftsHtml}
       ${notesHtml}
       <div style="margin-top:24px;text-align:center"><a href="${ss.getUrl()}#gid=${sh.getSheetId()}" style="display:inline-block;background:${NAVY};color:#ffffff;text-decoration:none;font-weight:600;padding:11px 18px;border-radius:8px">Open the full Mon–Sun log</a></div>
     </td></tr>

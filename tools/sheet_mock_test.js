@@ -71,6 +71,12 @@ res.push(post(payload('2026-09-21', 'a', (s, i) => s + i)));                  //
 const pb = payload('2026-09-23', 'b', (s, i) => (s + 1) * 3); pb.stations[1].notes = 'Oven 2 down, pizzas remade'; res.push(post(pb));           // Wed
 res.push(post(payload('2026-09-23', 'c', (s, i) => 1)));                     // Wed re-send (correction) overwrites
 res.push(post(payload('2026-09-23', 'c', (s, i) => 99)));                    // duplicate id ignored
+// Day / Swing shift logs: only wasted items, kept off the week tab, reported in their own email section
+const shiftLog = (date, id, shift, stations) => ({ id, key: SHARED_KEY, shift, chef: 'Shift Chef', badge: '456', date, submittedAt: new Date().toISOString(), totals: {}, stations: stations.map(([label, items]) => ({ station: label, stationLabel: label, closeTime: '13:15', notes: '', totals: {}, items: items.map(([category, item, uom, c, qty]) => ({ category, item, uom, qty, costPerUnit: c, cost: Math.round(qty * c * 100) / 100 })) })) });
+res.push(post(shiftLog('2026-09-22', 's1', 'day', [['Pechanga Fried Chicken', [['Chicken', 'Legs', 'ea.', 0.517, 6]]]])));
+res.push(post(shiftLog('2026-09-24', 's2', 'swing', [['Little Wok', [['Entrees', 'Orange Chicken', 'LBS', 4, 2.5]]], ['American Classic', [['Grill', 'Burger Patty', 'ea.', 1.5, 4]]]])));
+res.push(post(shiftLog('2026-09-24', 's2', 'swing', [['Little Wok', [['Entrees', 'Orange Chicken', 'LBS', 4, 99]]]])));  // duplicate id ignored
+res.push(post(shiftLog('2026-09-24', 's3', 'day', [['Agave', [['Proteins', 'Carne Asada', 'Lbs.', 8.6, 0]]]])));             // nothing wasted → rejected
 res.push(post(payload('2026-09-27', 'd', (s, i) => 12, ['Proteins', 'Birria', 'Lbs.', 5]))); // Sun + new menu item
 res.push(post(payload('2026-09-27', 'd2', (s, i) => 11)));                   // Sun re-send → UPDATED weekly
 res.push(post(payload('2026-09-28', 'e', (s, i) => 2)));                     // next Monday → new tab, no email
@@ -79,6 +85,8 @@ console.log('responses', JSON.stringify(res));
 console.log('tabs', sheets.map(s => s.name).join(' , '));
 const wk = ss.getSheetByName('Week 9-21 to 9-27');
 console.log(wk.dump());
+const sl = ss.getSheetByName('Shift Log');
+console.log('Shift Log rows:', sl ? sl.getLastRow() - 1 : 0, '| week tab has Burger Patty:', wk.dump().includes('Burger Patty'));
 mails.forEach((x, i) => console.log('email', i + 1, '|', x.subject));
 fs.writeFileSync(path.join(out, 'mock_email.html'), mails[0].htmlBody);
 fs.writeFileSync(path.join(out, 'mock_email_late.html'), mails[mails.length - 1].htmlBody);
