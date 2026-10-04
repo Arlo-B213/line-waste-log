@@ -71,7 +71,8 @@ function doPost(e) {
   }
 }
 
-function doGet() { return json_({ ok: true, service: 'Line Waste Log' }); }
+const VERSION = 'shifts-1';  // bump when the app depends on new backend behavior; checked before app releases
+function doGet() { return json_({ ok: true, service: 'Line Waste Log', version: VERSION }); }
 
 /* =====================================================================
    SHIFT LOG — optional Day / Swing waste, one row per discarded item.
