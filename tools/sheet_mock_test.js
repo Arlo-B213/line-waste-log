@@ -94,3 +94,9 @@ fs.writeFileSync(path.join(out, 'mock_email_late.html'), mails[mails.length - 1]
 global.sendWeeklyReportNow = sendWeeklyReportNow;
 const before = mails.length; sendWeeklyReportNow();
 console.log('sendWeeklyReportNow ->', mails.length > before ? mails[mails.length - 1].subject : '(nothing sent)');
+// Remote resend: works once, then throttled for 10 minutes
+const props = {}; global.PropertiesService = { getScriptProperties: () => ({ getProperty: k => props[k] || null, setProperty: (k, v) => { props[k] = v; } }) };
+const m0 = mails.length;
+console.log('resend #1', JSON.stringify(post({ key: SHARED_KEY, action: 'resend-weekly' })), 'emails +' + (mails.length - m0));
+console.log('resend #2', JSON.stringify(post({ key: SHARED_KEY, action: 'resend-weekly' })), 'emails +' + (mails.length - m0));
+console.log('resend bad key', JSON.stringify(post({ key: 'nope', action: 'resend-weekly' })));

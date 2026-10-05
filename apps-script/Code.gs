@@ -33,6 +33,7 @@ function doPost(e) {
         htmlBody: '<p>The Line Waste Log app is connected. The weekly waste report will arrive here after each Sunday count.</p>' });
       return json_({ ok: true, test: true });
     }
+    if (p.action === 'resend-weekly') return json_(resendWeekly_());
     if (!p.stations || !p.stations.length) return json_({ ok: false, error: 'No outlets in report' });
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -574,6 +575,16 @@ function sendWeeklyReportNow() {
     return { s, sun: m ? new Date(Number(m[3]), Number(m[1]) - 1, Number(m[2])) : null };
   }).filter(x => x.sun && x.sun < today).sort((a, b) => b.sun - a.sun);
   if (done.length) sendWeeklyReport_(ss, done[0].s, false);
+}
+
+// Remote "send last week's report again", throttled so a leaked key can't flood the inbox.
+function resendWeekly_() {
+  const props = PropertiesService.getScriptProperties();
+  const last = Number(props.getProperty('lastResend') || 0);
+  if (Date.now() - last < 10 * 60 * 1000) return { ok: false, error: 'Report was resent in the last 10 minutes' };
+  props.setProperty('lastResend', String(Date.now()));
+  sendWeeklyReportNow();
+  return { ok: true, resent: true };
 }
 
 /** Run from the editor to email THIS week's numbers so far (a preview; Sunday's report still goes out). */
