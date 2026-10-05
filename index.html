@@ -234,6 +234,13 @@ table.rev tr.none td{color:var(--muted);border-bottom:0;padding:16px}
 dialog{background:var(--surface);color:var(--text);border:1px solid var(--border-2);border-radius:20px;max-width:500px;width:calc(100% - 32px);padding:24px;box-shadow:0 24px 64px rgba(0,0,0,.55)}
 dialog::backdrop{background:rgba(4,8,18,.72);backdrop-filter:blur(4px)}
 dialog h3{font-size:19px;font-weight:700;text-transform:none;letter-spacing:-.01em;color:var(--text);margin-bottom:16px}
+dialog.food{max-height:calc(100vh - 32px);overflow:auto}
+.fc-lead{margin:-8px 0 16px;line-height:1.5}
+.fc-sub{display:flex;align-items:baseline;gap:8px;margin:20px 0 10px;font-size:13.5px;font-weight:600;color:var(--muted)}
+.fc-sub span{font-size:12px;font-weight:500;color:var(--faint)}
+#fcOutlets{margin-bottom:6px}
+.fc-msg{min-height:20px;margin:10px 0 12px}
+select.inp{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 20px) 50%,calc(100% - 14px) 50%;background-size:6px 6px;background-repeat:no-repeat;padding-right:40px}
 .shift-pick{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:0 0 16px}
 .shift-pick button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-height:64px;padding:12px 14px;text-align:left;border-radius:var(--r-sm);border:1px solid var(--border-2);background:var(--surface);color:var(--text);transition:border-color .15s,background .15s,box-shadow .15s}
 .shift-pick b{font-size:16px;font-weight:700}
@@ -418,6 +425,22 @@ dialog.vid video{display:block;width:100%;aspect-ratio:16/9;background:#000}
   <video id="howtoVid" controls playsinline preload="none" poster="media/how-to-poster.jpg"><source src="media/how-to.mp4" type="video/mp4"></video>
   <p class="small muted vid-err hidden" id="vidErr">The video needs an internet connection. Try again when the tablet is online.</p>
 </dialog>
+<dialog id="dlgFood" class="food" aria-labelledby="foodTitle">
+  <h3 id="foodTitle">Food cost &amp; budget</h3>
+  <p class="small muted fc-lead">One shared weekly budget for the food court, plus what food actually cost. The weekly report compares waste to both.</p>
+  <div class="fields">
+    <label class="f">Week<select class="inp" id="fcWeek"></select></label>
+    <div class="fields two">
+      <label class="f">Budget (whole food court)<input class="inp num" id="fcBudget" inputmode="decimal" placeholder="$0.00"></label>
+      <label class="f">Actual food cost (total)<input class="inp num" id="fcActual" inputmode="decimal" placeholder="$0.00"></label>
+    </div>
+  </div>
+  <h4 class="fc-sub">Actual food cost by outlet <span>optional</span></h4>
+  <div class="fields two" id="fcOutlets"></div>
+  <p class="small fc-msg" id="fcMsg"></p>
+  <div class="row-actions"><button class="btn ghost" id="fcClose">Close</button><button class="btn gold" id="fcSave">Save</button></div>
+  <button class="btn link block hidden" id="fcResend">Email last week's report with these numbers</button>
+</dialog>
 <dialog id="dlgPin">
   <h3>Manager access</h3>
   <input class="inp" id="pinIn" type="password" inputmode="numeric" placeholder="Manager PIN">
@@ -434,7 +457,7 @@ dialog.vid video{display:block;width:100%;aspect-ratio:16/9;background:#000}
   <p class="small muted" id="setOutbox" style="margin:0 0 4px"></p>
   <p class="small" id="setMsg" style="min-height:18px;margin:0 0 12px"></p>
   <div class="row-actions" style="margin-bottom:10px"><button class="btn ghost" id="setTest">Send test</button><button class="btn ghost" id="setRetry">Retry unsent</button></div>
-  <div class="row-actions" style="margin-bottom:10px"><button class="btn ghost" id="setReset">Clear the current count</button></div>
+  <div class="row-actions" style="margin-bottom:10px"><button class="btn ghost" id="setFood">Food cost &amp; budget</button><button class="btn ghost" id="setReset">Clear the current count</button></div>
   <div class="row-actions"><button class="btn ghost" id="setClose">Close</button><button class="btn gold" id="setSave">Save</button></div>
 </dialog>
 
@@ -888,7 +911,73 @@ $("#setTest").onclick = async () => {
   catch(e){ m.style.color="var(--red)"; m.textContent="✗ "+e.message; }
 };
 $("#setRetry").onclick = async () => { readSettingsForm(); const n=await flushOutbox(); $("#setOutbox").textContent=`${outbox().length} unsent report(s) on this device.`; $("#setMsg").textContent = `${n} sent.`; };
-$("#setReset").onclick = () => { S = blankSession(); LS.del(SHIFTS[shift].key); $("#dlgSettings").close(); initStart(); show("vStart"); toast(`${SHIFTS[shift].noun} cleared`); };
+/* ---------- food cost & budget (manager) ---------- */
+const FC_LABELS = STATIONS.map(s => STATION_META[s.station].label);
+$("#fcOutlets").innerHTML = FC_LABELS.map((l,i) => `<label class="f">${esc(l)}<input class="inp num" data-fc="${i}" inputmode="decimal" placeholder="$0.00"></label>`).join("");
+const isoPlus = (iso, days) => { const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + days); return d.toLocaleDateString("en-CA"); };
+const mdLabel = iso => { const [,m,d] = iso.split("-").map(Number); return `${m}/${d}`; };
+function fcWeeks(){
+  const t = new Date(todayISO() + "T12:00:00"), mon = isoPlus(todayISO(), -((t.getDay()+6)%7));
+  return Array.from({length:9}, (_, i) => isoPlus(mon, -7*i));   // [this week, last week, …]
+}
+const fcNum = el => { const t = el.value.replace(/[$,\s]/g,""); return t === "" ? "" : Number(t); };
+const fcFmt = n => n == null || n === "" ? "" : (Math.round(n*100)/100).toFixed(2);
+function fcSumHint(){
+  const vals = [...document.querySelectorAll("[data-fc]")].map(fcNum).filter(v => v !== "" && isFinite(v));
+  $("#fcActual").placeholder = vals.length ? `Sum of outlets: ${money(vals.reduce((a,b)=>a+b,0))}` : "$0.00";
+}
+function fcMsg(text, color){ $("#fcMsg").textContent = text; $("#fcMsg").style.color = color || "var(--muted)"; }
+async function fcLoad(){
+  const weekOf = $("#fcWeek").value;
+  [$("#fcBudget"), $("#fcActual"), ...document.querySelectorAll("[data-fc]")].forEach(el => el.value = "");
+  $("#fcResend").classList.add("hidden"); fcSumHint();
+  if (!settings.url) { fcMsg("Set the Service URL in Settings first.", "var(--amber)"); return; }
+  fcMsg("Loading…");
+  try {
+    const j = await post({key:settings.key, action:"food-cost-get", weekOf});
+    if ($("#fcWeek").value !== weekOf) return;
+    const d = j.data;
+    if (d) {
+      $("#fcBudget").value = fcFmt(d.budget); $("#fcActual").value = fcFmt(d.actual);
+      document.querySelectorAll("[data-fc]").forEach(el => { const v = d.outlets[FC_LABELS[+el.dataset.fc]]; el.value = v == null ? "" : fcFmt(v); });
+      fcMsg("Saved numbers loaded. Edit and save to update them.");
+    } else fcMsg("Nothing saved for this week yet.");
+    fcSumHint();
+  } catch(e){ fcMsg("Couldn't load: " + e.message, "var(--red)"); }
+}
+$("#fcWeek").addEventListener("change", fcLoad);
+document.querySelectorAll("[data-fc]").forEach(el => el.addEventListener("input", fcSumHint));
+$("#setFood").onclick = () => {
+  readSettingsForm(); $("#dlgSettings").close();
+  $("#fcWeek").innerHTML = fcWeeks().map((w,i) => `<option value="${w}">Mon ${mdLabel(w)} – Sun ${mdLabel(isoPlus(w,6))}${i===0?" (this week)":i===1?" (last week)":""}</option>`).join("");
+  $("#fcWeek").selectedIndex = 1;
+  $("#dlgFood").showModal(); fcLoad();
+};
+$("#fcClose").onclick = () => $("#dlgFood").close();
+$("#fcSave").onclick = async () => {
+  const fields = [$("#fcBudget"), $("#fcActual"), ...document.querySelectorAll("[data-fc]")];
+  const bad = fields.find(el => { const v = fcNum(el); return v !== "" && (!isFinite(v) || v < 0); });
+  if (bad) { bad.focus(); fcMsg("Enter amounts as numbers, like 4250 or 4,250.00.", "var(--red)"); return; }
+  if (fields.every(el => fcNum(el) === "")) { fcMsg("Enter at least the budget or the actual food cost.", "var(--amber)"); return; }
+  const outlets = {}; document.querySelectorAll("[data-fc]").forEach(el => { const v = fcNum(el); if (v !== "") outlets[FC_LABELS[+el.dataset.fc]] = v; });
+  const weekOf = $("#fcWeek").value, btn = $("#fcSave");
+  btn.disabled = true; fcMsg("Saving…");
+  try {
+    await post({key:settings.key, action:"food-cost-save", weekOf, budget:fcNum($("#fcBudget")), actual:fcNum($("#fcActual")), outlets, by:S.chef || "Manager"});
+    const lastWeek = $("#fcWeek").selectedIndex === 1;
+    fcMsg(`✓ Saved for the week of ${mdLabel(weekOf)}.` + ($("#fcWeek").selectedIndex === 0 ? " It will be in Sunday's report." : ""), "var(--green)");
+    $("#fcResend").classList.toggle("hidden", !lastWeek);
+  } catch(e){ fcMsg("Couldn't save: " + e.message, "var(--red)"); }
+  finally { btn.disabled = false; }
+};
+$("#fcResend").onclick = async () => {
+  const btn = $("#fcResend"); btn.disabled = true; fcMsg("Sending…");
+  try { await post({key:settings.key, action:"resend-weekly"}); fcMsg("✓ Last week's report was emailed to management.", "var(--green)"); btn.classList.add("hidden"); }
+  catch(e){ fcMsg("Couldn't send: " + e.message, "var(--red)"); }
+  finally { btn.disabled = false; }
+};
+
+$("#setReset").onclick =() => { S = blankSession(); LS.del(SHIFTS[shift].key); $("#dlgSettings").close(); initStart(); show("vStart"); toast(`${SHIFTS[shift].noun} cleared`); };
 
 function toast(msg){ document.querySelectorAll(".toast").forEach(x=>x.remove()); const t=document.createElement("div"); t.className="toast"; t.textContent=msg; document.body.appendChild(t); requestAnimationFrame(()=>t.classList.add("show")); setTimeout(()=>t.classList.remove("show"),2400); setTimeout(()=>t.remove(),2700); }
 

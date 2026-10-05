@@ -34,6 +34,11 @@ function doPost(e) {
       return json_({ ok: true, test: true });
     }
     if (p.action === 'resend-weekly') return json_(resendWeekly_());
+    if (p.action === 'food-cost-save') return json_(saveFoodCost_(SpreadsheetApp.getActiveSpreadsheet(), p));
+    if (p.action === 'food-cost-get') {
+      const mon = dateOnly_(p.weekOf);
+      return json_({ ok: true, weekOf: p.weekOf, data: mon ? readFoodCost_(SpreadsheetApp.getActiveSpreadsheet(), mon) : null });
+    }
     if (!p.stations || !p.stations.length) return json_({ ok: false, error: 'No outlets in report' });
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -72,7 +77,7 @@ function doPost(e) {
   }
 }
 
-const VERSION = 'shifts-1';  // bump when the app depends on new backend behavior; checked before app releases
+const VERSION = 'foodcost-1';  // bump when the app depends on new backend behavior; checked before app releases
 function doGet() { return json_({ ok: true, service: 'Line Waste Log', version: VERSION }); }
 
 /* =====================================================================
@@ -416,7 +421,7 @@ function weekBounds_(sh) {
 // Sheets may store a business date as a Date or keep the ISO string.
 function dateOnly_(x) {
   if (x instanceof Date) return new Date(x.getFullYear(), x.getMonth(), x.getDate());
-  const s = String(x);
+  const s = String(x).replace(/^'/, '');
   return /^\d{4}-\d{2}-\d{2}/.test(s) ? new Date(Number(s.slice(0, 4)), Number(s.slice(5, 7)) - 1, Number(s.slice(8, 10))) : null;
 }
 
@@ -513,6 +518,46 @@ function sendWeeklyReport_(ss, sh, late) {
       swTop.map(t => row(`<span style="font-weight:600">${esc_(t.item)}</span><div style="font-size:12px;color:${MUTE}">${esc_(t.station)} · ${fmtQ(t.qty)} ${esc_(t.uom)}</div>`, t.cost, '')).join('') + `</table>`;
   }
 
+  // Food cost vs budget: total waste (closing + Day/Swing shifts) against the week's food cost numbers.
+  const wkB = weekBounds_(sh);
+  const fc = wkB ? readFoodCost_(ss, wkB.mon) : null;
+  const swCost = sw.reduce((a, x) => a + x.cost, 0);
+  const totalWaste = weekCost + swCost;
+  const pct = (a, b) => b ? (Math.round(1000 * a / b) / 10) + '%' : '—';
+  const fcRow = (label, val, sub, subColor) => sub
+    ? `<tr><td style="padding:9px 0 2px;color:${INK};vertical-align:top">${label}</td><td style="padding:9px 0 2px 10px;text-align:right;white-space:nowrap;vertical-align:top;font-weight:700;color:${INK}">${val}</td></tr>` +
+      `<tr><td colspan="2" style="padding:0 0 9px;border-bottom:1px solid ${LINE};text-align:right;font-size:12px;color:${subColor || MUTE}">${sub}</td></tr>`
+    : `<tr><td style="${cellL};color:${INK}">${label}</td><td style="${cellR};font-weight:700;color:${INK}">${val}</td></tr>`;
+  let foodHtml;
+  if (fc && (fc.budget != null || fc.actual != null)) {
+    let rows = '';
+    if (fc.budget != null) rows += fcRow('Budget', money(fc.budget), 'Whole food court');
+    if (fc.actual != null) {
+      const diff = fc.budget != null ? fc.actual - fc.budget : null;
+      rows += fcRow('Actual food cost', money(fc.actual),
+        diff == null ? '' : (diff > 0 ? 'Over budget by ' : 'Under budget by ') + money(Math.abs(diff)) + ' (' + pct(Math.abs(diff), fc.budget) + ')',
+        diff == null ? '' : diff > 0 ? '#b02a2a' : '#2e7d4f');
+    }
+    rows += fcRow('<b>Total waste</b>', money(totalWaste),
+      [fc.actual != null ? pct(totalWaste, fc.actual) + ' of actual food cost' : '', fc.budget != null ? pct(totalWaste, fc.budget) + ' of budget' : ''].filter(Boolean).join(' · ') +
+      (swCost ? `<br>Closing ${money(weekCost)} + Day/Swing ${money(swCost)}` : ''));
+    const outletKeys = Object.keys(fc.outlets);
+    let outletHtml = '';
+    if (outletKeys.length) {
+      const closingBy = {}; W.stations.forEach((s, i) => { closingBy[s.label] = stWeek[i].cost; });
+      const shiftBy = {}; sw.forEach(x => { shiftBy[x.station] = (shiftBy[x.station] || 0) + x.cost; });
+      outletHtml = `<div style="font-size:12px;font-weight:600;color:${MUTE};margin:12px 0 2px">Waste vs actual food cost, by outlet</div>` +
+        `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">` +
+        FC_OUTLETS.filter(o => fc.outlets[o] != null).map(o => {
+          const w = (closingBy[o] || 0) + (shiftBy[o] || 0);
+          return fcRow(esc_(o), money(w) + ' <span style="font-weight:400;color:' + MUTE + '">of ' + money(fc.outlets[o]) + '</span>', pct(w, fc.outlets[o]) + ' wasted');
+        }).join('') + `</table>`;
+    }
+    foodHtml = h('Food cost vs budget') + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">${rows}</table>` + outletHtml;
+  } else {
+    foodHtml = h('Food cost vs budget') + `<div style="font-size:13px;color:${MUTE};background:#f9fafb;border-radius:8px;padding:10px 12px">This week's budget and food cost haven't been entered yet. A manager can add them in the app under ⚙︎ Settings ▸ Food cost and re-send this report.</div>`;
+  }
+
   const alerts = [];
   if (late && !logged[6]) alerts.push(`<div style="background:#fdf1dc;color:#8a5a00;border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:13px">Sunday's count wasn't submitted, so this report went out with the first count of the next week.</div>`);
   if (missing.length) alerts.push(`<div style="background:#fbe3e1;color:#9b2c24;border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:13px"><b>No count submitted:</b> ${missing.map(esc_).join(', ')}</div>`);
@@ -536,6 +581,7 @@ function sendWeeklyReport_(ss, sh, late) {
     </td></tr>
     <tr><td style="padding:4px 18px 22px">
       ${alerts.join('')}
+      ${foodHtml}
       ${h('By outlet')}
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">${outletRows}
         <tr><td style="padding:10px 0;font-weight:700">All outlets</td><td style="padding:10px 0 10px 10px;text-align:right;font-weight:700">${money(weekCost)}</td></tr></table>
@@ -575,6 +621,48 @@ function sendWeeklyReportNow() {
     return { s, sun: m ? new Date(Number(m[3]), Number(m[1]) - 1, Number(m[2])) : null };
   }).filter(x => x.sun && x.sun < today).sort((a, b) => b.sun - a.sun);
   if (done.length) sendWeeklyReport_(ss, done[0].s, false);
+}
+
+/* =====================================================================
+   FOOD COST — weekly budget (one shared budget for the food court) and
+   actual food cost (total + per outlet), entered by a manager in the app.
+   One row per week on the Food Cost tab; saving a week again updates it.
+   ===================================================================== */
+const FOOD_SHEET = 'Food Cost';
+const FC_OUTLETS = ['Pechanga Fried Chicken', 'Pronto', 'Little Wok', 'Agave', 'American Classic'];  // must match the app's outlet labels
+const num_ = v => (v === '' || v == null || isNaN(Number(v))) ? '' : Math.round(Number(v) * 100) / 100;
+
+function foodSheet_(ss) {
+  return sheet_(ss, FOOD_SHEET, ['Week Of (Mon)', 'Budget ($)', 'Actual Food Cost ($)']
+    .concat(FC_OUTLETS.map(o => o + ' ($)'), ['Updated At', 'Updated By']));
+}
+function findFoodRow_(sh, mon) {
+  if (sh.getLastRow() < 2) return 0;
+  const v = sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues();
+  for (let i = 0; i < v.length; i++) { const d = dateOnly_(v[i][0]); if (d && d.getTime() === mon.getTime()) return i + 2; }
+  return 0;
+}
+function saveFoodCost_(ss, p) {
+  const mon = dateOnly_(p.weekOf);
+  if (!mon || mon.getDay() !== 1) return { ok: false, error: 'weekOf must be a Monday (YYYY-MM-DD)' };
+  const sh = foodSheet_(ss);
+  const outlets = p.outlets || {};
+  const row = ["'" + p.weekOf, num_(p.budget), num_(p.actual)].concat(FC_OUTLETS.map(o => num_(outlets[o])), [new Date(), String(p.by || '')]);
+  const r = findFoodRow_(sh, mon) || sh.getLastRow() + 1;
+  sh.getRange(r, 1, 1, row.length).setValues([row]);
+  return { ok: true, saved: p.weekOf };
+}
+function readFoodCost_(ss, mon) {
+  const sh = ss.getSheetByName(FOOD_SHEET); if (!sh) return null;
+  const r = findFoodRow_(sh, mon); if (!r) return null;
+  const v = sh.getRange(r, 1, 1, 3 + FC_OUTLETS.length).getValues()[0];
+  const n = x => typeof x === 'number' ? x : null;
+  const outlets = {};
+  FC_OUTLETS.forEach((o, i) => { if (n(v[3 + i]) != null) outlets[o] = v[3 + i]; });
+  let actual = n(v[2]);
+  const keys = Object.keys(outlets);
+  if (actual == null && keys.length) actual = keys.reduce((a, k) => a + outlets[k], 0);  // total left blank → sum of outlets
+  return { budget: n(v[1]), actual, outlets };
 }
 
 // Remote "send last week's report again", throttled so a leaked key can't flood the inbox.

@@ -77,6 +77,11 @@ res.push(post(shiftLog('2026-09-22', 's1', 'day', [['Pechanga Fried Chicken', [[
 res.push(post(shiftLog('2026-09-24', 's2', 'swing', [['Little Wok', [['Entrees', 'Orange Chicken', 'LBS', 4, 2.5]]], ['American Classic', [['Grill', 'Burger Patty', 'ea.', 1.5, 4]]]])));
 res.push(post(shiftLog('2026-09-24', 's2', 'swing', [['Little Wok', [['Entrees', 'Orange Chicken', 'LBS', 4, 99]]]])));  // duplicate id ignored
 res.push(post(shiftLog('2026-09-24', 's3', 'day', [['Agave', [['Proteins', 'Carne Asada', 'Lbs.', 8.6, 0]]]])));             // nothing wasted → rejected
+// Food cost for the week of 9/21: saved, then corrected (same week updates the row)
+res.push(post({ key: SHARED_KEY, action: 'food-cost-save', weekOf: '2026-09-21', budget: 4000, actual: 4100, outlets: { 'Pechanga Fried Chicken': 900, 'Pronto': 1500 }, by: 'Mgr' }));
+res.push(post({ key: SHARED_KEY, action: 'food-cost-save', weekOf: '2026-09-21', budget: 4000, actual: 3800, outlets: { 'Pechanga Fried Chicken': 900, 'Pronto': 1500, 'Little Wok': 800, 'Agave': 600 }, by: 'Mgr' }));
+res.push(post({ key: SHARED_KEY, action: 'food-cost-save', weekOf: '2026-09-23', budget: 1 }));   // not a Monday → rejected
+res.push(post({ key: SHARED_KEY, action: 'food-cost-get', weekOf: '2026-09-21' }));
 res.push(post(payload('2026-09-27', 'd', (s, i) => 12, ['Proteins', 'Birria', 'Lbs.', 5]))); // Sun + new menu item
 res.push(post(payload('2026-09-27', 'd2', (s, i) => 11)));                   // Sun re-send → UPDATED weekly
 res.push(post(payload('2026-09-28', 'e', (s, i) => 2)));                     // next Monday → new tab, no email
