@@ -77,11 +77,10 @@ res.push(post(shiftLog('2026-09-22', 's1', 'day', [['Pechanga Fried Chicken', [[
 res.push(post(shiftLog('2026-09-24', 's2', 'swing', [['Little Wok', [['Entrees', 'Orange Chicken', 'LBS', 4, 2.5]]], ['American Classic', [['Grill', 'Burger Patty', 'ea.', 1.5, 4]]]])));
 res.push(post(shiftLog('2026-09-24', 's2', 'swing', [['Little Wok', [['Entrees', 'Orange Chicken', 'LBS', 4, 99]]]])));  // duplicate id ignored
 res.push(post(shiftLog('2026-09-24', 's3', 'day', [['Agave', [['Proteins', 'Carne Asada', 'Lbs.', 8.6, 0]]]])));             // nothing wasted → rejected
-// Food cost for the week of 9/21: saved, then corrected (same week updates the row)
-res.push(post({ key: SHARED_KEY, action: 'food-cost-save', weekOf: '2026-09-21', budget: 4000, actual: 4100, outlets: { 'Pechanga Fried Chicken': 900, 'Pronto': 1500 }, by: 'Mgr' }));
-res.push(post({ key: SHARED_KEY, action: 'food-cost-save', weekOf: '2026-09-21', budget: 4000, actual: 3800, outlets: { 'Pechanga Fried Chicken': 900, 'Pronto': 1500, 'Little Wok': 800, 'Agave': 600 }, by: 'Mgr' }));
-res.push(post({ key: SHARED_KEY, action: 'food-cost-save', weekOf: '2026-09-23', budget: 1 }));   // not a Monday → rejected
-res.push(post({ key: SHARED_KEY, action: 'food-cost-get', weekOf: '2026-09-21' }));
+// Monthly food cost: shared September budget, daily actuals (9/23 corrected), bad month rejected
+res.push(post({ key: SHARED_KEY, action: 'food-budget-save', month: '2026-09', budget: 30000 }).ok);
+[['2026-09-21', 1000], ['2026-09-22', 1100], ['2026-09-23', 950], ['2026-09-23', 900]].forEach(([date, actual]) => res.push(post({ key: SHARED_KEY, action: 'food-actual-save', date, actual }).ok));
+res.push(post({ key: SHARED_KEY, action: 'food-budget-save', month: 'Sept', budget: 1 }));
 res.push(post(payload('2026-09-27', 'd', (s, i) => 12, ['Proteins', 'Birria', 'Lbs.', 5]))); // Sun + new menu item
 res.push(post(payload('2026-09-27', 'd2', (s, i) => 11)));                   // Sun re-send → UPDATED weekly
 res.push(post(payload('2026-09-28', 'e', (s, i) => 2)));                     // next Monday → new tab, no email
@@ -91,6 +90,9 @@ console.log('tabs', sheets.map(s => s.name).join(' , '));
 const wk = ss.getSheetByName('Week 9-21 to 9-27');
 console.log(wk.dump());
 const sl = ss.getSheetByName('Shift Log');
+const fm = post({ key: SHARED_KEY, action: 'food-month-get', month: '2026-09' }).summary;
+console.log('Sept summary:', JSON.stringify({ budget: fm.budget, mtdActual: fm.mtdActual, actualDays: fm.actualDays, lastActualDay: fm.lastActualDay, mtdWaste: fm.mtdWaste, paceBudget: fm.paceBudget, projected: fm.projected, through: fm.through }));
+console.log(ss.getSheetByName('Food Cost Sep 2026').dump().split(String.fromCharCode(10)).filter((l, i) => i < 4 || (i >= 23 && i <= 30)).join(String.fromCharCode(10)));
 console.log('Shift Log rows:', sl ? sl.getLastRow() - 1 : 0, '| week tab has Burger Patty:', wk.dump().includes('Burger Patty'));
 mails.forEach((x, i) => console.log('email', i + 1, '|', x.subject));
 fs.writeFileSync(path.join(out, 'mock_email.html'), mails[0].htmlBody);

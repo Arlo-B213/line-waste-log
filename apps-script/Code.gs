@@ -34,11 +34,12 @@ function doPost(e) {
       return json_({ ok: true, test: true });
     }
     if (p.action === 'resend-weekly') return json_(resendWeekly_());
-    if (p.action === 'food-cost-save') return json_(saveFoodCost_(SpreadsheetApp.getActiveSpreadsheet(), p));
-    if (p.action === 'food-cost-get') {
-      const mon = dateOnly_(p.weekOf);
-      return json_({ ok: true, weekOf: p.weekOf, data: mon ? readFoodCost_(SpreadsheetApp.getActiveSpreadsheet(), mon) : null });
+    if (p.action === 'food-month-get') {
+      const mo = parseMonth_(p.month);
+      return json_(mo ? { ok: true, summary: foodMonthSummary_(SpreadsheetApp.getActiveSpreadsheet(), mo.y, mo.m, todayBiz_()) } : { ok: false, error: 'month must look like YYYY-MM' });
     }
+    if (p.action === 'food-budget-save') return json_(saveFoodBudget_(SpreadsheetApp.getActiveSpreadsheet(), p));
+    if (p.action === 'food-actual-save') return json_(saveFoodActual_(SpreadsheetApp.getActiveSpreadsheet(), p));
     if (!p.stations || !p.stations.length) return json_({ ok: false, error: 'No outlets in report' });
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -62,6 +63,7 @@ function doPost(e) {
     if (rows.length) log.getRange(log.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
 
     const week = updateWeek_(ss, p);
+    touchFoodMonth_(ss, p.date);
     if (DAILY_EMAIL) sendReport_(p, ss.getUrl(), week);
     // Weekly report: goes out when Sunday's count comes in (week complete).
     if (week.idx === 6) sendWeeklyReport_(ss, week.sheet, false);
@@ -77,7 +79,7 @@ function doPost(e) {
   }
 }
 
-const VERSION = 'foodcost-1';  // bump when the app depends on new backend behavior; checked before app releases
+const VERSION = 'foodcost-2';  // bump when the app depends on new backend behavior; checked before app releases
 function doGet() { return json_({ ok: true, service: 'Line Waste Log', version: VERSION }); }
 
 /* =====================================================================
@@ -98,6 +100,7 @@ function logShift_(ss, p) {
       hm12_(s.closeTime), p.chef, "'" + p.badge, s.notes || ''])));
   if (!rows.length) return { ok: false, error: 'No waste in shift log' };
   sh.getRange(sh.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+  touchFoodMonth_(ss, p.date);
   return { ok: true, shift: label };
 }
 
@@ -287,7 +290,7 @@ function writeSummary_(sh) {
 function sendReport_(p, sheetUrl, week) {
   const [y, m, d] = p.date.split('-').map(Number);
   const dateStr = Utilities.formatDate(new Date(y, m - 1, d), TIMEZONE, 'EEE M/d/yyyy');
-  const money = n => '$' + Number(n).toFixed(2);
+  const money = n => (n < 0 ? '-$' : '$') + Math.abs(Number(n)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const color = q => q >= RED_AT ? '#d93b3b' : q >= AMBER_AT ? '#e08a00' : '#2e9e62';
   const dot = q => `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${color(q)};margin-right:6px"></span>`;
   const td = 'padding:6px 8px;border-bottom:1px solid #f0f0f0';
@@ -439,7 +442,7 @@ function weekNotes_(ss, sh) {
 
 function sendWeeklyReport_(ss, sh, late) {
   const W = readWeek_(sh);
-  const money = n => '$' + Number(n).toFixed(2);
+  const money = n => (n < 0 ? '-$' : '$') + Math.abs(Number(n)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtQ = q => (Math.round(q * 100) / 100).toString();
   const color = q => q >= RED_AT ? '#d93b3b' : q >= AMBER_AT ? '#e08a00' : '';
 
@@ -518,45 +521,45 @@ function sendWeeklyReport_(ss, sh, late) {
       swTop.map(t => row(`<span style="font-weight:600">${esc_(t.item)}</span><div style="font-size:12px;color:${MUTE}">${esc_(t.station)} · ${fmtQ(t.qty)} ${esc_(t.uom)}</div>`, t.cost, '')).join('') + `</table>`;
   }
 
-  // Food cost vs budget: total waste (closing + Day/Swing shifts) against the week's food cost numbers.
-  const wkB = weekBounds_(sh);
-  const fc = wkB ? readFoodCost_(ss, wkB.mon) : null;
-  const swCost = sw.reduce((a, x) => a + x.cost, 0);
-  const totalWaste = weekCost + swCost;
+  // Month-to-date food cost: one shared monthly budget, daily actuals, waste so far. One block per month the week touches.
   const pct = (a, b) => b ? (Math.round(1000 * a / b) / 10) + '%' : '—';
   const fcRow = (label, val, sub, subColor) => sub
     ? `<tr><td style="padding:9px 0 2px;color:${INK};vertical-align:top">${label}</td><td style="padding:9px 0 2px 10px;text-align:right;white-space:nowrap;vertical-align:top;font-weight:700;color:${INK}">${val}</td></tr>` +
       `<tr><td colspan="2" style="padding:0 0 9px;border-bottom:1px solid ${LINE};text-align:right;font-size:12px;color:${subColor || MUTE}">${sub}</td></tr>`
     : `<tr><td style="${cellL};color:${INK}">${label}</td><td style="${cellR};font-weight:700;color:${INK}">${val}</td></tr>`;
-  let foodHtml;
-  if (fc && (fc.budget != null || fc.actual != null)) {
+  const wkB = weekBounds_(sh);
+  const months = [];
+  if (wkB) [wkB.mon, wkB.sun].forEach(d => { if (!months.some(x => x.y === d.getFullYear() && x.m === d.getMonth())) months.push({ y: d.getFullYear(), m: d.getMonth() }); });
+  const foodHtml = months.map(({ y, m }) => {
+    const asOf = wkB.sun < new Date(y, m + 1, 0) ? wkB.sun : new Date(y, m + 1, 0);
+    const s = foodMonthSummary_(ss, y, m, asOf);
+    const done = s.through >= s.daysInMonth;
+    const title = h(`Food cost · ${esc_(s.label)}${done ? '' : ' to date'}`);
+    if (s.budget == null && !s.actualDays) return title +
+      `<div style="font-size:13px;color:${MUTE};background:#f9fafb;border-radius:8px;padding:10px 12px">Waste so far this month: <b>${money(s.mtdWaste)}</b>. Enter the monthly budget and each day's food cost in the app under ⚙︎ Settings ▸ Food cost &amp; budget to compare.</div>`;
     let rows = '';
-    if (fc.budget != null) rows += fcRow('Budget', money(fc.budget), 'Whole food court');
-    if (fc.actual != null) {
-      const diff = fc.budget != null ? fc.actual - fc.budget : null;
-      rows += fcRow('Actual food cost', money(fc.actual),
-        diff == null ? '' : (diff > 0 ? 'Over budget by ' : 'Under budget by ') + money(Math.abs(diff)) + ' (' + pct(Math.abs(diff), fc.budget) + ')',
-        diff == null ? '' : diff > 0 ? '#b02a2a' : '#2e7d4f');
+    if (s.budget != null) rows += fcRow('Monthly budget', money(s.budget), 'All 5 restaurants · ' + money(s.budget / s.daysInMonth) + ' a day');
+    if (s.actualDays) {
+      const over = s.paceBudget != null && s.mtdActual > s.paceBudget;
+      rows += fcRow(done ? 'Actual food cost' : 'Actual food cost so far', money(s.mtdActual),
+        `${s.actualDays} day${s.actualDays === 1 ? '' : 's'} entered, through ${MON3[m]} ${s.lastActualDay}` +
+        (s.budget != null ? ` · ${pct(s.mtdActual, s.budget)} of budget used for ${pct(s.actualDays, s.daysInMonth)} of the month's days` : ''),
+        s.paceBudget == null ? '' : over ? '#b02a2a' : '#2e7d4f');
+      if (s.paceBudget != null) {
+        const diff = s.mtdActual - s.paceBudget, even = Math.abs(diff) < 1;
+        rows += fcRow(even ? 'On budget pace' : over ? 'Over budget pace by' : 'Under budget pace by', even ? 'On track' : money(Math.abs(diff)),
+          `At this rate the month ends near ${money(s.projected)}` + (Math.abs(s.projected - s.budget) < 1 ? ', right on budget' : ` (${s.projected > s.budget ? 'over' : 'under'} budget by ${money(Math.abs(s.projected - s.budget))})`),
+          even ? '#2e7d4f' : over ? '#b02a2a' : '#2e7d4f');
+      }
     }
-    rows += fcRow('<b>Total waste</b>', money(totalWaste),
-      [fc.actual != null ? pct(totalWaste, fc.actual) + ' of actual food cost' : '', fc.budget != null ? pct(totalWaste, fc.budget) + ' of budget' : ''].filter(Boolean).join(' · ') +
-      (swCost ? `<br>Closing ${money(weekCost)} + Day/Swing ${money(swCost)}` : ''));
-    const outletKeys = Object.keys(fc.outlets);
-    let outletHtml = '';
-    if (outletKeys.length) {
-      const closingBy = {}; W.stations.forEach((s, i) => { closingBy[s.label] = stWeek[i].cost; });
-      const shiftBy = {}; sw.forEach(x => { shiftBy[x.station] = (shiftBy[x.station] || 0) + x.cost; });
-      outletHtml = `<div style="font-size:12px;font-weight:600;color:${MUTE};margin:12px 0 2px">Waste vs actual food cost, by outlet</div>` +
-        `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">` +
-        FC_OUTLETS.filter(o => fc.outlets[o] != null).map(o => {
-          const w = (closingBy[o] || 0) + (shiftBy[o] || 0);
-          return fcRow(esc_(o), money(w) + ' <span style="font-weight:400;color:' + MUTE + '">of ' + money(fc.outlets[o]) + '</span>', pct(w, fc.outlets[o]) + ' wasted');
-        }).join('') + `</table>`;
+    rows += fcRow(done ? '<b>Waste for the month</b>' : '<b>Waste so far</b>', money(s.mtdWaste),
+      [s.actualDays ? pct(s.mtdWaste, s.mtdActual) + ' of actual food cost' : '', s.budget != null ? pct(s.mtdWaste, s.budget) + ' of the monthly budget' : ''].filter(Boolean).join(' · '));
+    if (s.budget != null && s.through < s.daysInMonth) {
+      const left = s.budget - s.mtdActual, daysLeft = s.daysInMonth - s.actualDays;   // every day without an actual yet
+      rows += fcRow('Budget left', money(left), daysLeft ? money(left / daysLeft) + ' a day for the ' + daysLeft + ' days not yet entered' : '', left < 0 ? '#b02a2a' : '');
     }
-    foodHtml = h('Food cost vs budget') + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">${rows}</table>` + outletHtml;
-  } else {
-    foodHtml = h('Food cost vs budget') + `<div style="font-size:13px;color:${MUTE};background:#f9fafb;border-radius:8px;padding:10px 12px">This week's budget and food cost haven't been entered yet. A manager can add them in the app under ⚙︎ Settings ▸ Food cost and re-send this report.</div>`;
-  }
+    return title + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">${rows}</table>`;
+  }).join('');
 
   const alerts = [];
   if (late && !logged[6]) alerts.push(`<div style="background:#fdf1dc;color:#8a5a00;border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:13px">Sunday's count wasn't submitted, so this report went out with the first count of the next week.</div>`);
@@ -624,45 +627,133 @@ function sendWeeklyReportNow() {
 }
 
 /* =====================================================================
-   FOOD COST — weekly budget (one shared budget for the food court) and
-   actual food cost (total + per outlet), entered by a manager in the app.
-   One row per week on the Food Cost tab; saving a week again updates it.
+   FOOD COST — one shared MONTHLY budget for the whole food court (all 5
+   restaurants) and one ACTUAL food cost total per day. Each month has its
+   own tab ("Food Cost Oct 2026"): budget in B2, one row per day from row 5.
+   Actuals (column B) can be entered in the app or typed into the tab; the
+   waste columns are refreshed from the counts; running totals are formulas.
    ===================================================================== */
-const FOOD_SHEET = 'Food Cost';
-const FC_OUTLETS = ['Pechanga Fried Chicken', 'Pronto', 'Little Wok', 'Agave', 'American Classic'];  // must match the app's outlet labels
+const FC_FIRST = 5, FC_COLS = 9;
+const MON3 = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTH_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const num_ = v => (v === '' || v == null || isNaN(Number(v))) ? '' : Math.round(Number(v) * 100) / 100;
+const fcMonthName_ = (y, m) => 'Food Cost ' + MON3[m] + ' ' + y;   // m = 0..11
+const daysIn_ = (y, m) => new Date(y, m + 1, 0).getDate();
+function parseMonth_(s) { const t = String(s || '').match(/^(\d{4})-(\d{2})$/); return t && Number(t[2]) >= 1 && Number(t[2]) <= 12 ? { y: Number(t[1]), m: Number(t[2]) - 1 } : null; }
+function todayBiz_() { const d = new Date(); if (d.getHours() < 5) d.setDate(d.getDate() - 1); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
 
-function foodSheet_(ss) {
-  return sheet_(ss, FOOD_SHEET, ['Week Of (Mon)', 'Budget ($)', 'Actual Food Cost ($)']
-    .concat(FC_OUTLETS.map(o => o + ' ($)'), ['Updated At', 'Updated By']));
+function fcMonthSheet_(ss, y, m) {
+  const name = fcMonthName_(y, m);
+  let sh = ss.getSheetByName(name);
+  if (sh) return sh;
+  sh = ss.insertSheet(name);
+  const n = daysIn_(y, m);
+  sh.getRange(1, 1).setValue('FOOD COST · ' + MONTH_FULL[m] + ' ' + y + ' · all 5 restaurants (one shared budget)');
+  sh.getRange(2, 1, 1, 2).setValues([['Monthly budget ($)', '']]);
+  sh.getRange(4, 1, 1, FC_COLS).setValues([['Date', 'Actual Food Cost ($)', 'Closing Waste ($)', 'Shift Waste ($)', 'Total Waste ($)',
+    'Month-to-date Actual ($)', 'Month-to-date Waste ($)', 'Budget Used', 'Waste % of Actual']]);
+  sh.getRange(FC_FIRST, 1, n, 1).setValues(Array.from({ length: n }, (_, i) => [new Date(y, m, i + 1)])).setNumberFormat('ddd m/d');
+  const f = [];
+  for (let i = 0; i < n; i++) {
+    const r = FC_FIRST + i;
+    f.push([
+      `=IF(AND(C${r}="",D${r}=""),"",N(C${r})+N(D${r}))`,
+      `=IF(B${r}="","",SUM(B$${FC_FIRST}:B${r}))`,
+      `=IF(E${r}="","",SUM(E$${FC_FIRST}:E${r}))`,
+      `=IF(OR(F${r}="",$B$2=""),"",F${r}/$B$2)`,
+      `=IF(OR(F${r}="",G${r}=""),"",G${r}/F${r})`]);
+  }
+  sh.getRange(FC_FIRST, 5, n, 5).setFormulas(f);
+  sh.getRange(1, 1).setFontWeight('bold').setFontSize(13).setFontColor(WK_NAVY);
+  sh.getRange(2, 1, 1, 2).setFontWeight('bold');
+  sh.getRange(2, 2).setNumberFormat('$#,##0.00').setBackground('#fff7d6');
+  sh.getRange(4, 1, 1, FC_COLS).setFontWeight('bold').setBackground(WK_NAVY).setFontColor('#ffffff').setWrap(true);
+  sh.getRange(FC_FIRST, 2, n, 1).setBackground('#fff7d6');
+  sh.getRange(FC_FIRST, 2, n, 6).setNumberFormat('$#,##0.00');
+  sh.getRange(FC_FIRST, 8, n, 2).setNumberFormat('0.0%');
+  sh.setFrozenRows(4);
+  sh.setColumnWidth(1, 90);
+  for (let c = 2; c <= FC_COLS; c++) sh.setColumnWidth(c, 120);
+  return sh;
 }
-function findFoodRow_(sh, mon) {
-  if (sh.getLastRow() < 2) return 0;
-  const v = sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues();
-  for (let i = 0; i < v.length; i++) { const d = dateOnly_(v[i][0]); if (d && d.getTime() === mon.getTime()) return i + 2; }
-  return 0;
+
+// Closing waste per day (from the Mon–Sun week tabs, where re-sends overwrite) and Day/Swing waste (Shift Log).
+function fcWasteByDay_(ss, y, m) {
+  const n = daysIn_(y, m), closing = new Array(n).fill(null), shift = new Array(n).fill(0);
+  ss.getSheets().filter(s => /^Week \d+-\d+ to /.test(s.getName())).forEach(sh => {
+    const wk = weekBounds_(sh); if (!wk) return;
+    const W = readWeek_(sh);
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(wk.mon.getFullYear(), wk.mon.getMonth(), wk.mon.getDate() + i);
+      if (d.getFullYear() !== y || d.getMonth() !== m) continue;
+      if (!W.stations.some(s => s.close[i] && s.close[i] !== '')) continue;    // no closing count that day
+      closing[d.getDate() - 1] = W.stations.reduce((a, s) => a + s.items.reduce((b, it) => b + (it.days[i] || 0) * it.cost, 0), 0);
+    }
+  });
+  const log = ss.getSheetByName(SHIFT_SHEET);
+  if (log && log.getLastRow() > 1) log.getRange(2, 1, log.getLastRow() - 1, 15).getValues().forEach(r => {
+    const d = dateOnly_(r[2]);
+    if (d && d.getFullYear() === y && d.getMonth() === m) shift[d.getDate() - 1] += Number(r[10]) || 0;
+  });
+  return { closing, shift };
 }
-function saveFoodCost_(ss, p) {
-  const mon = dateOnly_(p.weekOf);
-  if (!mon || mon.getDay() !== 1) return { ok: false, error: 'weekOf must be a Monday (YYYY-MM-DD)' };
-  const sh = foodSheet_(ss);
-  const outlets = p.outlets || {};
-  const row = ["'" + p.weekOf, num_(p.budget), num_(p.actual)].concat(FC_OUTLETS.map(o => num_(outlets[o])), [new Date(), String(p.by || '')]);
-  const r = findFoodRow_(sh, mon) || sh.getLastRow() + 1;
-  sh.getRange(r, 1, 1, row.length).setValues([row]);
-  return { ok: true, saved: p.weekOf };
+
+function refreshFoodMonth_(ss, y, m) {
+  const sh = fcMonthSheet_(ss, y, m), n = daysIn_(y, m), w = fcWasteByDay_(ss, y, m);
+  const r2 = x => Math.round(x * 100) / 100;
+  sh.getRange(FC_FIRST, 3, n, 2).setValues(w.closing.map((c, i) => [c == null ? '' : r2(c), w.shift[i] ? r2(w.shift[i]) : '']));
+  sh.getRange(3, 1).setValue('Updated ' + Utilities.formatDate(new Date(), TIMEZONE, 'EEE M/d h:mm a') +
+    ' · Enter the budget in B2 and each day\'s actual food cost in column B (or in the app: ⚙︎ Settings ▸ Food cost & budget).');
+  return sh;
 }
-function readFoodCost_(ss, mon) {
-  const sh = ss.getSheetByName(FOOD_SHEET); if (!sh) return null;
-  const r = findFoodRow_(sh, mon); if (!r) return null;
-  const v = sh.getRange(r, 1, 1, 3 + FC_OUTLETS.length).getValues()[0];
-  const n = x => typeof x === 'number' ? x : null;
-  const outlets = {};
-  FC_OUTLETS.forEach((o, i) => { if (n(v[3 + i]) != null) outlets[o] = v[3 + i]; });
-  let actual = n(v[2]);
-  const keys = Object.keys(outlets);
-  if (actual == null && keys.length) actual = keys.reduce((a, k) => a + outlets[k], 0);  // total left blank → sum of outlets
-  return { budget: n(v[1]), actual, outlets };
+
+// Month-to-date numbers as of a date (through the end of the month for past months).
+function foodMonthSummary_(ss, y, m, asOf) {
+  const n = daysIn_(y, m), sh = ss.getSheetByName(fcMonthName_(y, m));
+  const w = fcWasteByDay_(ss, y, m);
+  const raw = sh ? sh.getRange(FC_FIRST, 2, n, 1).getValues().map(r => typeof r[0] === 'number' ? r[0] : null) : new Array(n).fill(null);
+  const budgetCell = sh ? sh.getRange(2, 2).getValue() : '';
+  const budget = typeof budgetCell === 'number' ? budgetCell : null;
+  const end = new Date(y, m, n);
+  const through = asOf >= end ? n : (asOf.getFullYear() === y && asOf.getMonth() === m ? asOf.getDate() : 0);
+  const days = Array.from({ length: n }, (_, i) => ({ day: i + 1, actual: raw[i], closing: w.closing[i], shift: w.shift[i] || 0 }));
+  let mtdActual = 0, actualDays = 0, lastActualDay = 0, mtdWaste = 0;
+  days.forEach(d => {
+    if (d.day > through) return;
+    if (d.actual != null) { mtdActual += d.actual; actualDays++; lastActualDay = d.day; }
+    mtdWaste += (d.closing || 0) + d.shift;
+  });
+  const pace = budget != null && actualDays ? budget * actualDays / n : null;          // budget share for the days that have actuals (gaps aren't counted as $0)
+  return {
+    month: y + '-' + String(m + 1).padStart(2, '0'), label: MONTH_FULL[m] + ' ' + y, daysInMonth: n, through,
+    budget, mtdActual: Math.round(mtdActual * 100) / 100, actualDays, lastActualDay, mtdWaste: Math.round(mtdWaste * 100) / 100,
+    paceBudget: pace == null ? null : Math.round(pace * 100) / 100,
+    projected: actualDays ? Math.round(mtdActual / actualDays * n * 100) / 100 : null,
+    days
+  };
+}
+
+function saveFoodBudget_(ss, p) {
+  const mo = parseMonth_(p.month);
+  if (!mo) return { ok: false, error: 'month must look like YYYY-MM' };
+  const v = num_(p.budget);
+  if (v !== '' && v < 0) return { ok: false, error: 'Budget cannot be negative' };
+  refreshFoodMonth_(ss, mo.y, mo.m).getRange(2, 2).setValue(v);
+  return { ok: true, summary: foodMonthSummary_(ss, mo.y, mo.m, todayBiz_()) };
+}
+function saveFoodActual_(ss, p) {
+  const d = dateOnly_(p.date);
+  if (!d) return { ok: false, error: 'date must look like YYYY-MM-DD' };
+  const v = num_(p.actual);
+  if (v !== '' && v < 0) return { ok: false, error: 'Food cost cannot be negative' };
+  const sh = refreshFoodMonth_(ss, d.getFullYear(), d.getMonth());
+  sh.getRange(FC_FIRST + d.getDate() - 1, 2).setValue(v);
+  return { ok: true, summary: foodMonthSummary_(ss, d.getFullYear(), d.getMonth(), todayBiz_()) };
+}
+// Keep the month tab's waste columns current after each count; never let it break a submission.
+function touchFoodMonth_(ss, iso) {
+  try { const d = dateOnly_(iso); if (d) refreshFoodMonth_(ss, d.getFullYear(), d.getMonth()); }
+  catch (e) { console.error('food month refresh failed: ' + e); }
 }
 
 // Remote "send last week's report again", throttled so a leaked key can't flood the inbox.
